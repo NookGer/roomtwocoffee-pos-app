@@ -53,7 +53,17 @@ function getNextOrderNum(date){ const s=ls_get(SK_SEQ,{date:"",count:0}); const 
 function peekOrderNum(date){ const s=ls_get(SK_SEQ,{date:"",count:0}); return s.date===date?s.count+1:1; }
 function fmtNum(n){ return "#"+String(n).padStart(3,"0"); }
 
-const PALETTE=["#6B4F3A","#4A7C6B","#7C6B4A","#8B6B4A","#4A6B7C","#7C4A6B","#6B7C4A","#7C4A4A","#4A4A7C","#C87941","#41967C","#7941C8","#C84179","#4179C8","#79C841","#C8A841"];
+const PALETTE=[
+  // โทนเข้ม (เดิม)
+  "#6B4F3A","#4A7C6B","#7C6B4A","#8B6B4A","#4A6B7C","#7C4A6B",
+  "#6B7C4A","#7C4A4A","#4A4A7C","#C87941","#41967C","#7941C8",
+  "#C84179","#4179C8","#79C841","#C8A841",
+  // โทนกลาง
+  "#E8724A","#4A9EE8","#E84A9E","#9EE84A","#E8C44A","#4AE8C4",
+  // พาสเทล/โทนอ่อน
+  "#F4A7B9","#A7C4F4","#A7F4C4","#F4E4A7","#C4A7F4","#F4C4A7",
+  "#F4A7E4","#A7E4F4","#D4F4A7","#F4D4A7","#A7F4D4","#F4A7D4",
+];
 const MAX_ORDERS=40000;
 function todayStr(){ return new Date().toISOString().split("T")[0]; }
 function fmtDate(s){ return new Date(s+"T00:00:00").toLocaleDateString("th-TH",{weekday:"short",day:"numeric",month:"short",year:"numeric"}); }
@@ -80,6 +90,17 @@ const iStyle={width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid #
 // ROOT APP
 // ══════════════════════════════════════════════════
 export default function App() {
+  // Inject Mali font globally
+  useEffect(()=>{
+    const link=document.createElement("link");
+    link.rel="stylesheet";
+    link.href="https://fonts.googleapis.com/css2?family=Mali:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap";
+    document.head.appendChild(link);
+    const style=document.createElement("style");
+    style.textContent="*,*::before,*::after{font-family:'Mali',cursive!important;}";
+    document.head.appendChild(style);
+    return()=>{ document.head.removeChild(link); document.head.removeChild(style); };
+  },[]);
   const [data,setData]     = useState(()=>{ const d=ls_get(SK_DATA,DEF_DATA); if(!d.addons)d.addons=[]; if(!d.freeOpts)d.freeOpts=[]; if(!d.discounts)d.discounts=[]; return d; });
   const [rcpt,setRcptSt]   = useState(()=>ls_get(SK_RCPT,DEF_RCPT));
   const [ledger,setLedger] = useState(()=>ls_get(SK_LDGR,[]));
@@ -247,7 +268,7 @@ export default function App() {
     <div style={{fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",background:"#F5F0EA",minHeight:"100vh",display:"flex",flexDirection:"column",userSelect:"none"}}>
 
       {/* TOP BAR */}
-      <div style={{background:"#2C1810",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,zIndex:10,minHeight:64}}>
+      <div style={{background:"#2C1810",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,zIndex:100,minHeight:64,position:"sticky",top:0}}>
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
         <SyncIndicator syncSt={syncSt} onRestore={handleRestore}/>
@@ -316,52 +337,57 @@ function DatePill({dispDate,badge,onChangeRequest}){
 function PosView({sortedCats,catProducts,activeCat,setActive,cart,cartTotal,cartQty,cartDone,checkout,setCart,setModal,nextNum,data,openEditModal,getLinked,addToCart}){
   const unitLabel=cart.length===0?"":(()=>{const u={};cart.forEach(i=>{const k=i.unit||"รายการ";u[k]=(u[k]||0)+i.qty;});return Object.keys(u).map(k=>`${u[k]} ${k}`).join(", ");})();
   return (
-    <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 50px)"}}>
-      {/* Categories */}
-      <div style={{width:124,background:"#EDE6DC",borderRight:"1px solid #D4C4B0",overflowY:"auto",padding:"10px 7px",display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+    <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 64px)"}}>
+      {/* Categories — wider for iPad */}
+      <div style={{width:150,background:"#EDE6DC",borderRight:"1px solid #D4C4B0",overflowY:"auto",padding:"12px 8px",display:"flex",flexDirection:"column",gap:8,flexShrink:0}}>
         {sortedCats.map(cat=>(
           <button key={cat.id} onClick={()=>setActive(cat.id)}
-            style={{background:activeCat===cat.id?cat.color:"transparent",color:activeCat===cat.id?"#FFF":"#5C4A36",border:`1.5px solid ${activeCat===cat.id?cat.color:"#C4B4A0"}`,borderRadius:10,padding:"10px 6px",fontSize:13,fontWeight:600,cursor:"pointer",textAlign:"center",transition:"all .18s",fontFamily:"inherit",width:"100%"}}>
+            style={{background:activeCat===cat.id?cat.color:"transparent",color:activeCat===cat.id?"#FFF":"#5C4A36",border:`2px solid ${activeCat===cat.id?cat.color:"#C4B4A0"}`,borderRadius:12,padding:"14px 8px",fontSize:16,fontWeight:700,cursor:"pointer",textAlign:"center",transition:"all .18s",fontFamily:"inherit",width:"100%",lineHeight:1.3}}>
             {cat.name}
           </button>
         ))}
         <div style={{flex:1}}/>
-        <button onClick={()=>setModal({type:"alert",msg:"ไปที่ 'จัดการ' เพื่อเพิ่มหมวดหมู่"})} style={{background:"none",border:"1.5px dashed #C4B4A0",borderRadius:10,padding:8,fontSize:12,color:"#9C8C7C",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><Plus size={12}/> หมวดหมู่</button>
+        <button onClick={()=>setModal({type:"alert",msg:"ไปที่ 'จัดการ' เพื่อเพิ่มหมวดหมู่"})} style={{background:"none",border:"2px dashed #C4B4A0",borderRadius:12,padding:10,fontSize:13,color:"#9C8C7C",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4,fontFamily:"inherit"}}><Plus size={14}/> หมวดหมู่</button>
       </div>
-      {/* Products */}
-      <div style={{flex:1,overflowY:"auto",padding:14,background:"#F5F0EA"}}>
-        {catProducts.length===0?<div style={{textAlign:"center",color:"#9C8C7C",marginTop:60,fontSize:14}}><Coffee size={34} style={{margin:"0 auto 12px",opacity:.35}}/><br/>ยังไม่มีสินค้า</div>
-          :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(134px,1fr))",gap:12}}>
+      {/* Products — larger cards */}
+      <div style={{flex:1,overflowY:"auto",padding:16,background:"#F5F0EA"}}>
+        {catProducts.length===0?<div style={{textAlign:"center",color:"#9C8C7C",marginTop:80,fontSize:18}}><Coffee size={48} style={{margin:"0 auto 16px",opacity:.35}}/><br/>ยังไม่มีสินค้า</div>
+          :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:16}}>
             {catProducts.map(p=>{
               const {addons,freeOpts,discounts}=getLinked(p);
               const hasOpts=addons.length+freeOpts.length+discounts.length>0;
               return (
                 <div key={p.id} onClick={()=>setModal({type:"order",product:p})}
-                  style={{background:p.color,borderRadius:14,minHeight:114,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:12,gap:6,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,.07)",transition:"all .18s",userSelect:"none"}}>
-                  {p.image?<img src={p.image} alt={p.name} style={{width:52,height:52,borderRadius:10,objectFit:"cover"}}/>:<span style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,.93)",textAlign:"center",lineHeight:1.4}}>{p.name}</span>}
-                  <span style={{fontSize:11,color:"rgba(255,255,255,.72)"}}>{p.variants.length===1?`฿${p.variants[0].price}`:`฿${Math.min(...p.variants.map(v=>v.price))}+`}</span>
-                  {hasOpts&&<span style={{fontSize:9,color:"rgba(255,255,255,.55)"}}>+ ตัวเลือก</span>}
+                  style={{background:p.color,borderRadius:18,minHeight:140,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,gap:8,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.1)",transition:"all .18s",userSelect:"none"}}>
+                  {p.image?<img src={p.image} alt={p.name} style={{width:68,height:68,borderRadius:12,objectFit:"cover"}}/>
+                    :<span style={{fontSize:17,fontWeight:700,color:"rgba(255,255,255,.95)",textAlign:"center",lineHeight:1.4}}>{p.name}</span>}
+                  <span style={{fontSize:15,color:"rgba(255,255,255,.85)",fontWeight:600}}>{p.variants.length===1?`฿${p.variants[0].price}`:`฿${Math.min(...p.variants.map(v=>v.price))}+`}</span>
+                  {hasOpts&&<span style={{fontSize:11,color:"rgba(255,255,255,.65)"}}>+ ตัวเลือก</span>}
                 </div>
               );
             })}
           </div>}
       </div>
-      {/* Cart */}
-      <div style={{width:294,background:"#FFF8F2",borderLeft:"1px solid #E4D4C0",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"11px 14px",borderBottom:"1px solid #E4D4C0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:6}}><ShoppingCart size={15} color="#6B4F3A"/><span style={{fontWeight:700,fontSize:14,color:"#2C1810"}}>ออเดอร์</span><span style={{background:"#EDE6DC",color:"#6B4F3A",borderRadius:10,padding:"1px 9px",fontSize:12,fontWeight:700}}>{fmtNum(nextNum)}</span></div>
-          {cart.length>0&&<button onClick={()=>setCart([])} style={{background:"none",border:"none",color:"#C88C6C",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>ล้างทั้งหมด</button>}
+      {/* Cart — wider for iPad */}
+      <div style={{width:340,background:"#FFF8F2",borderLeft:"1px solid #E4D4C0",display:"flex",flexDirection:"column",flexShrink:0}}>
+        <div style={{padding:"14px 16px",borderBottom:"1px solid #E4D4C0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <ShoppingCart size={20} color="#6B4F3A"/>
+            <span style={{fontWeight:700,fontSize:18,color:"#2C1810"}}>ออเดอร์</span>
+            <span style={{background:"#EDE6DC",color:"#6B4F3A",borderRadius:12,padding:"2px 12px",fontSize:15,fontWeight:700}}>{fmtNum(nextNum)}</span>
+          </div>
+          {cart.length>0&&<button onClick={()=>setCart([])} style={{background:"none",border:"none",color:"#C88C6C",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ล้างทั้งหมด</button>}
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"6px 10px"}}>
-          {cart.length===0?<div style={{textAlign:"center",color:"#B8A898",marginTop:40,fontSize:13}}><ShoppingCart size={30} style={{margin:"0 auto 8px",opacity:.4}}/><br/>ยังไม่มีรายการ</div>
+        <div style={{flex:1,overflowY:"auto",padding:"8px 12px"}}>
+          {cart.length===0?<div style={{textAlign:"center",color:"#B8A898",marginTop:60,fontSize:16}}><ShoppingCart size={40} style={{margin:"0 auto 12px",opacity:.4}}/><br/>ยังไม่มีรายการ</div>
             :cart.map(item=><CartItem key={item.key} item={item} onQty={cartQty} onDone={cartDone} onEdit={openEditModal}/>)}
         </div>
-        <div style={{padding:"12px 14px",paddingBottom:"max(12px, env(safe-area-inset-bottom, 12px))",borderTop:"1px solid #E4D4C0"}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-            <span style={{color:"#5C4A36",fontSize:12}}>{unitLabel||"ยังไม่มีรายการ"}</span>
-            <span style={{fontWeight:700,fontSize:20,color:"#2C1810"}}>{baht(cartTotal)}</span>
+        <div style={{padding:"14px 16px",paddingBottom:"max(14px, env(safe-area-inset-bottom, 14px))",borderTop:"1px solid #E4D4C0"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,alignItems:"center"}}>
+            <span style={{color:"#5C4A36",fontSize:14}}>{unitLabel||"ยังไม่มีรายการ"}</span>
+            <span style={{fontWeight:700,fontSize:26,color:"#2C1810"}}>{baht(cartTotal)}</span>
           </div>
-          <button onClick={checkout} style={{width:"100%",background:cart.length?"#2C1810":"#B0A098",color:"#F5E8D8",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:cart.length?"pointer":"not-allowed",fontFamily:"inherit",transition:"all .18s"}}>💳 จ่ายเงิน</button>
+          <button onClick={checkout} style={{width:"100%",background:cart.length?"#2C1810":"#B0A098",color:"#F5E8D8",border:"none",borderRadius:14,padding:"16px",fontSize:20,fontWeight:700,cursor:cart.length?"pointer":"not-allowed",fontFamily:"inherit",transition:"all .18s"}}>💳 จ่ายเงิน</button>
         </div>
       </div>
     </div>
@@ -503,19 +529,19 @@ function ModalFooter({onCancel,onSave}){ return<div style={{display:"flex",gap:1
 function EmptyMsg({label}){ return<div style={{textAlign:"center",color:"#9C8C7C",padding:"40px 0",fontSize:14}}><Coffee size={32} style={{margin:"0 auto 10px",opacity:.35}}/><br/>{label}</div>; }
 function CartItem({item,onQty,onDone,onEdit}){
   return(
-    <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 4px",borderBottom:"1px solid #EDE4DA",opacity:item.done?0.5:1}}>
-      <input type="checkbox" checked={item.done} onChange={()=>onDone(item.key)} style={{accentColor:"#6B4F3A",width:15,height:15,cursor:"pointer",flexShrink:0}}/>
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 4px",borderBottom:"1px solid #EDE4DA",opacity:item.done?0.5:1}}>
+      <input type="checkbox" checked={item.done} onChange={()=>onDone(item.key)} style={{accentColor:"#6B4F3A",width:20,height:20,cursor:"pointer",flexShrink:0}}/>
       <div onClick={onEdit?()=>onEdit(item):undefined} style={{flex:1,minWidth:0,cursor:onEdit?"pointer":"default"}}>
-        <div style={{fontSize:12,fontWeight:600,color:"#2C1810",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:item.done?"line-through":"none"}}>{item.name} ({item.variant}){onEdit&&<span style={{fontSize:9,color:"#C8A882",marginLeft:4}}>✎</span>}</div>
-        {item.note&&<div style={{fontSize:10,color:"#7941C8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>— {item.note}</div>}
-        <div style={{fontSize:11,color:"#8C7C6C"}}>฿{item.price} / {item.unit||"รายการ"}</div>
+        <div style={{fontSize:15,fontWeight:700,color:"#2C1810",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:item.done?"line-through":"none"}}>{item.name} ({item.variant}){onEdit&&<span style={{fontSize:11,color:"#C8A882",marginLeft:4}}>✎</span>}</div>
+        {item.note&&<div style={{fontSize:12,color:"#7941C8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>— {item.note}</div>}
+        <div style={{fontSize:13,color:"#8C7C6C"}}>฿{item.price} / {item.unit||"รายการ"}</div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
-        <button onClick={()=>onQty(item.key,-1)} style={{width:22,height:22,borderRadius:6,border:"1px solid #D4C4B0",background:"#FFF",cursor:"pointer",fontSize:14,color:"#5C4A36",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}>−</button>
-        <span style={{fontSize:13,fontWeight:600,minWidth:18,textAlign:"center",color:"#2C1810"}}>{item.qty}</span>
-        <button onClick={()=>onQty(item.key, 1)} style={{width:22,height:22,borderRadius:6,border:"1px solid #D4C4B0",background:"#FFF",cursor:"pointer",fontSize:14,color:"#5C4A36",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}>+</button>
+      <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+        <button onClick={()=>onQty(item.key,-1)} style={{width:30,height:30,borderRadius:8,border:"1px solid #D4C4B0",background:"#FFF",cursor:"pointer",fontSize:18,color:"#5C4A36",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}>−</button>
+        <span style={{fontSize:16,fontWeight:700,minWidth:22,textAlign:"center",color:"#2C1810"}}>{item.qty}</span>
+        <button onClick={()=>onQty(item.key, 1)} style={{width:30,height:30,borderRadius:8,border:"1px solid #D4C4B0",background:"#FFF",cursor:"pointer",fontSize:18,color:"#5C4A36",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}>+</button>
       </div>
-      <span style={{fontSize:12,fontWeight:700,color:"#6B4F3A",minWidth:46,textAlign:"right"}}>{baht(item.price*item.qty)}</span>
+      <span style={{fontSize:14,fontWeight:700,color:"#6B4F3A",minWidth:54,textAlign:"right"}}>{baht(item.price*item.qty)}</span>
     </div>
   );
 }
