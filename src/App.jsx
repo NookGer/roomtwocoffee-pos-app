@@ -39,18 +39,23 @@ const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 async function sbUpsert(payload) {
   try {
+    const ts = new Date().toISOString();
     await fetch(`${SB_URL}/rest/v1/pos_snapshots`, {
       method: "POST",
       headers: { "Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`,"Prefer":"resolution=merge-duplicates" },
-      body: JSON.stringify({ id:"main", data:payload, updated_at:new Date().toISOString() }),
+      body: JSON.stringify({ id:"main", data:payload, updated_at:ts }),
     });
-  } catch(e) { console.warn("sb upsert failed",e); }
+    return ts; // คืน timestamp ที่ส่งไปจริงๆ
+  } catch(e) { console.warn("sb upsert failed",e); return null; }
 }
 async function sbFetch() {
-  const r = await fetch(`${SB_URL}/rest/v1/pos_snapshots?id=eq.main&select=data`, { headers:{"apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`} });
+  // ดึง updated_at มาด้วยเพื่อใช้เปรียบเทียบ timestamp
+  const r = await fetch(`${SB_URL}/rest/v1/pos_snapshots?id=eq.main&select=data,updated_at`, { headers:{"apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`} });
   if(!r.ok) throw new Error(await r.text());
   const rows = await r.json();
-  return rows[0]?.data || null;
+  if(!rows[0]) return null;
+  // คืน data พร้อม updated_at จาก Supabase row
+  return { ...rows[0].data, _sbUpdatedAt: rows[0].updated_at };
 }
 
 // ── Storage keys (v10) ──
@@ -140,6 +145,8 @@ export default function App() {
   const [pendDate,setPend] = useState(null);
   const [view,setView]     = useState("pos");
   const [nextNum,setNN]    = useState(()=>peekOrderNum(todayStr()));
+  // isRestoring: ล็อค UI ขณะดึงข้อมูลจาก Supabase ป้องกัน user แก้ไขก่อนข้อมูลพร้อม
+  const [isRestoring,setIsRestoring] = useState(()=>!localStorage.getItem(SK_DATA)&&navigator.onLine);
 
   const cash = computeCash(ledger);
 
@@ -148,48 +155,134 @@ export default function App() {
     if(s.length&&!s.find(c=>c.id===activeCat)) setActive(s[0].id);
   },[data.categories]);
 
+  // ── Dirty Flag ──
+  // isDirty = true เฉพาะเมื่อ user กระทำจริง (เพิ่มสินค้า, สั่งออเดอร์ ฯลฯ)
+  // ป้องกันการ upload ขึ้น Supabase โดยไม่ตั้งใจ
+  const isDirty = useRef(false);
+
   useEffect(()=>{
-    const on=()=>setSyncSt(s=>({...s,status:"synced"}));
+    // Online handler: เมื่อกลับมา online ให้เปรียบเทียบ timestamp ก่อนตัดสินใจ
+    const on=async()=>{
+      setSyncSt(s=>({...s,status:"synced"}));
+      // ถ้า user เคยทำงาน offline มา (isDirty=true) ต้องเช็คก่อนว่า
+      // Supabase มีข้อมูลใหม่กว่า local หรือเปล่า
+      if(isDirty.current){
+        try{
+          const snap=await sbFetch();
+          if(snap){
+            const sbTs=snap.data?.lastSynced||snap.updated_at||"";
+            const localTs=ls_get(SK_SYNC,{lastSynced:null}).lastSynced||"";
+            if(sbTs&&localTs&&sbTs>localTs){
+              // Supabase ใหม่กว่า → แจ้งเตือน user ให้เลือก
+              setModal({type:"conflict",sbTs,localTs});
+            }
+            // ถ้า local ใหม่กว่า หรือเท่ากัน → upload ต่อตามปกติ (isDirty จะจัดการเอง)
+          }
+        }catch(e){ /* ถ้า fetch ไม่ได้ก็ข้ามไป */ }
+      }
+    };
     const off=()=>setSyncSt(s=>({...s,status:"offline"}));
-    window.addEventListener("online",on); window.addEventListener("offline",off);
+    window.addEventListener("online",on);
+    window.addEventListener("offline",off);
     return()=>{ window.removeEventListener("online",on); window.removeEventListener("offline",off); };
+  },[]);
+
+  // Auto-restore: ถ้าไม่มีข้อมูลในเครื่องเลย ดึงจาก Supabase อัตโนมัติ
+  useEffect(()=>{
+    if(!localStorage.getItem(SK_DATA)&&navigator.onLine){
+      handleRestore();
+    } else {
+      setIsRestoring(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const syncUp=useCallback((d,l,cs,ct,r)=>{
     if(!navigator.onLine)return;
+    if(!isDirty.current)return;
+    // DEV Guard: ห้าม sync ขึ้น Supabase เมื่อรันบน localhost
+    // ป้องกันการเทสบน PC แล้วทับข้อมูลจริงบน Production
+    if(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1"){
+      console.warn("🚫 syncUp blocked: running on localhost (DEV mode) — Supabase protected");
+      return;
+    }
     setSyncSt(s=>({...s,status:"syncing"}));
     sbUpsert({data:d,ledger:l.slice(-MAX_ORDERS),costs:cs,ctof:ct,rcpt:r})
-      .then(()=>{ const ts=new Date().toISOString(); setSyncSt({status:"synced",lastSynced:ts}); ls_set(SK_SYNC,{lastSynced:ts}); })
+      .then(ts=>{
+        // ใช้ timestamp จริงที่ Supabase บันทึก ไม่ใช่ new Date() ในเครื่อง
+        const finalTs=ts||new Date().toISOString();
+        setSyncSt({status:"synced",lastSynced:finalTs});
+        ls_set(SK_SYNC,{lastSynced:finalTs});
+      })
       .catch(()=>setSyncSt(s=>({...s,status:"error"})));
   },[]);
 
   const persist=useCallback((nd,nl,ncs,nct,sync)=>{
     const d=nd??data, l=nl??ledger, cs=ncs??costs, ct=nct??ctof;
-    setData(d); ls_set(SK_DATA,d);
-    setLedger(l); ls_set(SK_LDGR,l);
+
+    // ── Rolling Window ──────────────────────────────
+    // orders: เก็บแค่ 400 วันล่าสุด ถ้าเกินลบเก่าสุดออกจนเหลือ 300 วัน
+    // ledger: เก็บแค่ 400 วันล่าสุดเช่นกัน
+    // Supabase sync รับข้อมูลชุดนี้เหมือนกัน
+    const today=new Date();
+    const daysAgo=(n)=>{ const d=new Date(today); d.setDate(d.getDate()-n); return d.toISOString().split("T")[0]; };
+    const cutoff400=daysAgo(400);
+    const cutoff300=daysAgo(300);
+
+    let finalOrders=d.orders||[];
+    const oldestOrder=finalOrders.length>0
+      ? finalOrders.slice().sort((a,b)=>new Date(a.ts)-new Date(b.ts))[0]
+      : null;
+    // ถ้ามีออเดอร์เก่ากว่า 400 วัน → ตัดให้เหลือแค่ 300 วันล่าสุด
+    if(oldestOrder&&(oldestOrder.date||oldestOrder.ts?.split("T")[0])<cutoff400){
+      finalOrders=finalOrders.filter(o=>(o.date||o.ts?.split("T")[0])>=cutoff300);
+    }
+
+    let finalLedger=l||[];
+    const oldestLedger=finalLedger.length>0
+      ? finalLedger.slice().sort((a,b)=>new Date(a.ts)-new Date(b.ts))[0]
+      : null;
+    if(oldestLedger&&oldestLedger.ts?.split("T")[0]<cutoff400){
+      finalLedger=finalLedger.filter(e=>e.ts?.split("T")[0]>=cutoff300||e.type==="initial");
+    }
+    // ────────────────────────────────────────────────
+
+    const finalData={...d,orders:finalOrders};
+    setData(finalData); ls_set(SK_DATA,finalData);
+    setLedger(finalLedger); ls_set(SK_LDGR,finalLedger);
     setCosts(cs); ls_set(SK_COST,cs);
     setCtof(ct); ls_set(SK_CTOF,ct);
-    if(sync) syncUp(d,l,cs,ct,rcpt);
+    if(sync){ isDirty.current=true; syncUp(finalData,finalLedger,cs,ct,rcpt); }
   },[data,ledger,costs,ctof,rcpt,syncUp]);
 
-  const persistRcpt=r=>{ setRcptSt(r); ls_set(SK_RCPT,r); };
+  const persistRcpt=r=>{ isDirty.current=true; setRcptSt(r); ls_set(SK_RCPT,r); };
 
   const handleRestore=async()=>{
+    setIsRestoring(true);
     setSyncSt(s=>({...s,status:"syncing"}));
     try {
       const snap=await sbFetch();
       if(snap){
-        const d=snap.data||DEF_DATA;
-        if(!d.freeOpts)d.freeOpts=[]; if(!d.discounts)d.discounts=[];
+        // sbFetch ใหม่คืน { ...data, _sbUpdatedAt } รวมกัน
+        const sbTs=snap._sbUpdatedAt||"";
+        const d=snap.data||snap; // compat: รองรับทั้ง format เก่าและใหม่
+        if(!d.addons)d.addons=[];
+        if(!d.freeOpts)d.freeOpts=[];
+        if(!d.discounts)d.discounts=[];
+        if(!d.categories||!d.categories.length)d.categories=DEF_DATA.categories;
         setData(d); ls_set(SK_DATA,d);
-        setLedger(snap.ledger||[]); ls_set(SK_LDGR,snap.ledger||[]);
-        setCosts(snap.costs||{}); ls_set(SK_COST,snap.costs||{});
-        setCtof(snap.ctof||{}); ls_set(SK_CTOF,snap.ctof||{});
-        if(snap.rcpt){ setRcptSt(snap.rcpt); ls_set(SK_RCPT,snap.rcpt); }
-        setModal({type:"alert",msg:"กู้คืนข้อมูลจาก Supabase สำเร็จ ✅"});
+        setLedger(snap.ledger||d.ledger||[]); ls_set(SK_LDGR,snap.ledger||d.ledger||[]);
+        setCosts(snap.costs||d.costs||{}); ls_set(SK_COST,snap.costs||d.costs||{});
+        setCtof(snap.ctof||d.ctof||{}); ls_set(SK_CTOF,snap.ctof||d.ctof||{});
+        const r=snap.rcpt||d.rcpt;
+        if(r){ setRcptSt(r); ls_set(SK_RCPT,r); }
+        // บันทึก timestamp ของ Supabase ลง local เพื่อใช้เปรียบเทียบ conflict
+        if(sbTs){ ls_set(SK_SYNC,{lastSynced:sbTs}); setSyncSt({status:"synced",lastSynced:sbTs}); }
+        isDirty.current=false;
       } else setModal({type:"alert",msg:"ไม่พบข้อมูลบน Supabase"});
     } catch(e){ setModal({type:"alert",msg:"เชื่อมต่อ Supabase ไม่ได้\n"+e.message}); }
     setSyncSt(s=>({...s,status:navigator.onLine?"synced":"offline"}));
+    setIsRestoring(false);
   };
 
   const sortedCats  = data.categories.slice().sort((a,b)=>a.order-b.order);
@@ -294,6 +387,17 @@ export default function App() {
   return (
     <div style={{fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",background:"#F5F0EA",height:"100vh",overflow:"hidden",display:"flex",flexDirection:"column",userSelect:"none"}}>
 
+      {/* Loading Screen — ล็อค UI ขณะดึงข้อมูลจาก Supabase */}
+      {isRestoring&&<div style={{position:"fixed",inset:0,background:"#2C1810",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:999}}>
+        <Coffee size={48} color="#D4A574" style={{marginBottom:20,opacity:.9}}/>
+        <div style={{fontSize:20,fontWeight:700,color:"#D4A574",marginBottom:8}}>RoomTwo Coffee</div>
+        <div style={{fontSize:14,color:"#C8A882",marginBottom:32}}>กำลังโหลดข้อมูล...</div>
+        <div style={{width:180,height:4,background:"rgba(255,255,255,.15)",borderRadius:4,overflow:"hidden"}}>
+          <div style={{height:"100%",background:"#D4A574",borderRadius:4,animation:"loading 1.4s ease-in-out infinite",width:"60%"}}/>
+        </div>
+        <style>{`@keyframes loading{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
+      </div>}
+
       {/* TOP BAR */}
       <div style={{background:"#2C1810",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,zIndex:100,minHeight:64,position:"sticky",top:0,width:"100%",boxSizing:"border-box"}}>
         <Coffee size={26} color="#D4A574"/>
@@ -321,6 +425,34 @@ export default function App() {
       {modal?.type==="change"&&<Overlay onClose={dismissChange} wide><ChangeModal modal={modal} onDismiss={dismissChange}/></Overlay>}
       {modal?.type==="viewReceipt"&&<Overlay onClose={()=>setModal(null)} wide><ChangeModal modal={modal} onDismiss={()=>setModal(null)}/></Overlay>}
       {modal?.type==="alert"&&<Overlay onClose={()=>setModal(null)}><AlertModal msg={modal.msg} onClose={()=>setModal(null)}/></Overlay>}
+      {modal?.type==="conflict"&&<Overlay onClose={()=>setModal(null)}>
+        <div style={{textAlign:"center",padding:"8px 0"}}>
+          <AlertTriangle size={38} color="#C87941" style={{margin:"0 auto 12px"}}/>
+          <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:8}}>ข้อมูลไม่ตรงกัน</div>
+          <div style={{fontSize:13,color:"#5C4A36",marginBottom:6,lineHeight:1.7}}>คุณแก้ไขข้อมูลขณะ Offline<br/>แต่บน Supabase มีข้อมูลที่ใหม่กว่า</div>
+          <div style={{background:"#F5F0EA",borderRadius:10,padding:"10px 14px",marginBottom:18,fontSize:12,color:"#8C7C6C"}}>
+            <div>Supabase อัปเดตล่าสุด: {modal.sbTs?fmtDT(modal.sbTs):"ไม่ทราบ"}</div>
+            <div>เครื่องนี้อัปเดตล่าสุด: {modal.localTs?fmtDT(modal.localTs):"ไม่ทราบ"}</div>
+          </div>
+          <div style={{fontSize:12,color:"#C84B4B",marginBottom:16}}>⚠️ เลือกอย่างระมัดระวัง ข้อมูลที่ไม่เลือกจะหายไป</div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={()=>{setModal(null);handleRestore();}}
+              style={{flex:1,background:"#4A7C6B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              ใช้ข้อมูล Supabase
+            </button>
+            <button onClick={()=>{
+              // force upload ข้อมูลในเครื่องโดย bypass dirty flag
+              setSyncSt(s=>({...s,status:"syncing"}));
+              sbUpsert({data,ledger:ledger.slice(-MAX_ORDERS),costs,ctof,rcpt})
+                .then(ts=>{ const t=ts||new Date().toISOString(); setSyncSt({status:"synced",lastSynced:t}); ls_set(SK_SYNC,{lastSynced:t}); })
+                .catch(()=>setSyncSt(s=>({...s,status:"error"})));
+              setModal(null);
+            }} style={{flex:1,background:"#C87941",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              ใช้ข้อมูลในเครื่อง
+            </button>
+          </div>
+        </div>
+      </Overlay>}
       {modal?.type==="confirm"&&<Overlay onClose={()=>setModal(null)}><ConfirmModal {...modal} onConfirm={()=>{modal.onConfirm();setModal(null);}} onCancel={()=>setModal(null)}/></Overlay>}
       {modal?.type==="confirmDate"&&<Overlay onClose={()=>setModal(null)}><ConfirmModal icon={<CalendarDays size={36} color="#C87941" style={{margin:"0 auto 12px"}}/>} msg={`เปลี่ยนวันที่เป็น\n"${fmtDate(modal.newDate)}"\nยืนยัน?`} confirmLabel="ยืนยัน" confirmColor="#6B4F3A" onConfirm={confirmDateChange} onCancel={()=>setModal(null)}/></Overlay>}
       {modal?.type==="confirmOrderDate"&&<Overlay onClose={()=>setModal(null)}><ConfirmModal icon={<AlertTriangle size={36} color="#C87941" style={{margin:"0 auto 12px"}}/>} msg={`ออเดอร์จะถูกบันทึกในวันที่\n"${fmtDate(modal.date)}"\nยืนยัน?`} confirmLabel="ยืนยัน" confirmColor="#6B4F3A" onConfirm={()=>setModal({type:"payment",received:"",total:modal.cartTotal})} onCancel={()=>setModal(null)}/></Overlay>}
@@ -331,14 +463,18 @@ export default function App() {
 // ── SyncIndicator ──
 function SyncIndicator({syncSt,onRestore}){
   const [open,setOpen]=useState(false);
-  const c={synced:{color:"#6CC97A",label:"Synced"},syncing:{color:"#C8A841",label:"Syncing..."},offline:{color:"#C96C6C",label:"Offline"},error:{color:"#C96C6C",label:"Error"}}[syncSt.status]||{color:"#C8A882",label:""};
+  const isDev=window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1";
+  const c=isDev
+    ? {color:"#7941C8",label:"DEV MODE"}
+    : ({synced:{color:"#6CC97A",label:"Synced"},syncing:{color:"#C8A841",label:"Syncing..."},offline:{color:"#C96C6C",label:"Offline"},error:{color:"#C96C6C",label:"Error"}}[syncSt.status]||{color:"#C8A882",label:""});
   return (
     <div style={{position:"relative"}}>
-      <div onClick={()=>setOpen(!open)} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.07)",borderRadius:20,padding:"3px 10px",border:"1px solid rgba(255,255,255,.12)",cursor:"pointer"}}>
+      <div onClick={()=>setOpen(!open)} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.07)",borderRadius:20,padding:"3px 10px",border:`1px solid ${isDev?"rgba(121,65,200,.5)":"rgba(255,255,255,.12)"}`,cursor:"pointer"}}>
         <div style={{width:7,height:7,borderRadius:"50%",background:c.color,boxShadow:`0 0 5px ${c.color}`,flexShrink:0}}/>
         <span style={{fontSize:11,color:c.color,whiteSpace:"nowrap"}}>{c.label}</span>
       </div>
       {open&&<div style={{position:"absolute",top:"calc(100% + 8px)",left:0,background:"#2C1810",border:"1px solid rgba(255,255,255,.15)",borderRadius:12,padding:"12px 14px",minWidth:240,zIndex:999,boxShadow:"0 8px 24px rgba(0,0,0,.5)"}}>
+        {isDev&&<div style={{fontSize:12,color:"#C8A841",marginBottom:8,padding:"6px 10px",background:"rgba(121,65,200,.2)",borderRadius:8,lineHeight:1.5}}>🚫 DEV MODE<br/>Sync ถูกบล็อก ป้องกันทับข้อมูล Production</div>}
         <div style={{fontSize:12,color:"#C8A882",marginBottom:10,lineHeight:1.6}}>{syncSt.lastSynced?`ซิงก์ล่าสุด:\n${fmtDT(syncSt.lastSynced)}`:"ยังไม่เคยซิงก์"}</div>
         <button onClick={()=>{setOpen(false);onRestore();}} style={{width:"100%",background:"rgba(255,255,255,.1)",color:"#F5E8D8",border:"1px solid rgba(255,255,255,.2)",borderRadius:8,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Download size={12}/> ดึงข้อมูลจาก Supabase</button>
       </div>}
