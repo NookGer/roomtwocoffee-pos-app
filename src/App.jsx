@@ -1235,58 +1235,130 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
   function handleClear(){
     if(pin.trim().toUpperCase()==="CLEARDATA"){
       onClearData(); setShowClear(false); setPin(""); setPinErr(false);
-    } else {
-      setPinErr(true); setTimeout(()=>setPinErr(false),2000);
-    }
+    } else { setPinErr(true); setTimeout(()=>setPinErr(false),2000); }
   }
-  return(
-    <div style={{flex:1,overflowY:"auto",padding:"20px 24px",maxWidth:560}}>
-      <div style={{fontWeight:700,fontSize:19,color:"#2C1810",marginBottom:20,display:"flex",alignItems:"center",gap:8}}><Settings size={19}/> ตั้งค่าใบเสร็จ</div>
-      <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:22,display:"flex",flexDirection:"column",gap:14}}>
-        <Field label="โลโก้ร้าน"><div style={{display:"flex",gap:12,alignItems:"center"}}>{form.logo&&<img src={form.logo} alt="logo" style={{width:60,height:60,borderRadius:10,objectFit:"contain",background:"#F5F0EA",padding:4}}/>}<div style={{display:"flex",flexDirection:"column",gap:6}}><button onClick={()=>logoRef.current?.click()} style={{background:"#F0E8DC",border:"1px solid #D4C4B0",borderRadius:8,padding:"7px 14px",fontSize:13,cursor:"pointer",color:"#5C4A36",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Camera size={12}/> อัปโหลดโลโก้</button>{form.logo&&<button onClick={()=>upd("logo",null)} style={{background:"none",border:"none",color:"#C84B4B",cursor:"pointer",fontSize:12,fontFamily:"inherit",textAlign:"left"}}>ลบโลโก้</button>}</div><input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>upd("logo",ev.target.result);r.readAsDataURL(f);}}/></div></Field>
-        <Field label="ชื่อร้าน"><input value={form.shopName} onChange={e=>upd("shopName",e.target.value)} style={iStyle}/></Field>
-        <Field label="ที่อยู่ร้าน (แสดงในบิล)"><input value={form.address||""} onChange={e=>upd("address",e.target.value)} placeholder="เช่น 123 ถ.สุขุมวิท กรุงเทพฯ" style={iStyle}/></Field>
-        <Field label="ช่องทางติดต่อ (Line / โทร)"><input value={form.contact||""} onChange={e=>upd("contact",e.target.value)} placeholder="เช่น Line: @roomtwocoffee" style={iStyle}/></Field>
-        <Field label="ชื่อพนักงาน"><input value={form.staffName||""} onChange={e=>upd("staffName",e.target.value)} placeholder="เช่น น้องมิ้ว" style={iStyle}/></Field>
-        <Field label="ข้อความขอบคุณ"><input value={form.thankMsg} onChange={e=>upd("thankMsg",e.target.value)} style={iStyle}/></Field>
 
-        {/* PromptPay section */}
-        <div style={{borderTop:"1px solid #E8D8C8",paddingTop:16}}>
-          <div style={{fontWeight:600,fontSize:14,color:"#2C1810",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>💳 PromptPay (QR รับชำระเงิน)</div>
-          <Field label="หมายเลขพร้อมเพย์ (เบอร์โทร หรือ เลขบัตรประชาชน)">
-            <input value={form.promptpay||""} onChange={e=>upd("promptpay",e.target.value)} placeholder="เช่น 0812345678 หรือ 1234567890123" style={iStyle}/>
+  // Demo QR payload for preview
+  const previewQR = form.promptpay
+    ? generatePromptPayQR(form.promptpay, 85)
+    : "";
+
+  return(
+    <div style={{flex:1,overflow:"hidden",height:"calc(100vh - 64px)",display:"flex"}}>
+
+      {/* ── LEFT: Form ── */}
+      <div style={{width:420,height:"100%",overflowY:"auto",padding:"24px 20px",borderRight:"1px solid #E4D4C0",background:"#F5F0EA",flexShrink:0}}>
+        <div style={{fontWeight:700,fontSize:18,color:"#2C1810",marginBottom:18,display:"flex",alignItems:"center",gap:8}}><Settings size={18}/> ตั้งค่าใบเสร็จ</div>
+
+        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:13,marginBottom:16}}>
+          {/* Logo */}
+          <Field label="โลโก้ร้าน">
+            <div style={{display:"flex",gap:12,alignItems:"center"}}>
+              {form.logo&&<img src={form.logo} alt="logo" style={{width:52,height:52,borderRadius:9,objectFit:"contain",background:"#F5F0EA",padding:3}}/>}
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <button onClick={()=>logoRef.current?.click()} style={{background:"#F0E8DC",border:"1px solid #D4C4B0",borderRadius:8,padding:"6px 12px",fontSize:13,cursor:"pointer",color:"#5C4A36",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Camera size={12}/> อัปโหลดโลโก้</button>
+                {form.logo&&<button onClick={()=>upd("logo",null)} style={{background:"none",border:"none",color:"#C84B4B",cursor:"pointer",fontSize:12,fontFamily:"inherit",textAlign:"left"}}>ลบโลโก้</button>}
+              </div>
+              <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>upd("logo",ev.target.result);r.readAsDataURL(f);}}/>
+            </div>
           </Field>
-          <Field label="ชื่อบัญชี (แสดงให้ลูกค้าตรวจสอบก่อนโอน)">
-            <input value={form.accountName||""} onChange={e=>upd("accountName",e.target.value)} placeholder="เช่น นาย สมชาย ใจดี" style={iStyle}/>
-          </Field>
-          {form.promptpay&&<div style={{fontSize:12,color:"#4A7C6B",background:"#EDF7ED",borderRadius:8,padding:"8px 12px"}}>✅ QR Code จะแสดงในบิลอัตโนมัติพร้อมยอดเงินที่ต้องชำระ</div>}
+          <Field label="ชื่อร้าน"><input value={form.shopName} onChange={e=>upd("shopName",e.target.value)} style={iStyle}/></Field>
+          <Field label="ที่อยู่ร้าน"><input value={form.address||""} onChange={e=>upd("address",e.target.value)} placeholder="เช่น 123/45 ถ.สุขุมวิท" style={iStyle}/></Field>
+          <Field label="ช่องทางติดต่อ (Line / โทร)"><input value={form.contact||""} onChange={e=>upd("contact",e.target.value)} placeholder="เช่น Line: @roomtwocoffee" style={iStyle}/></Field>
+          <Field label="ชื่อพนักงาน"><input value={form.staffName||""} onChange={e=>upd("staffName",e.target.value)} placeholder="เช่น น้องมิ้ว" style={iStyle}/></Field>
+          <Field label="ข้อความขอบคุณ"><input value={form.thankMsg} onChange={e=>upd("thankMsg",e.target.value)} style={iStyle}/></Field>
         </div>
 
-        <button onClick={()=>{onSave(form);setSaved(true);setTimeout(()=>setSaved(false),2000);}} style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:11,padding:"12px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+        {/* PromptPay */}
+        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:13,marginBottom:16}}>
+          <div style={{fontWeight:600,fontSize:14,color:"#2C1810",display:"flex",alignItems:"center",gap:6}}>💳 PromptPay</div>
+          <Field label="หมายเลขพร้อมเพย์"><input value={form.promptpay||""} onChange={e=>upd("promptpay",e.target.value)} placeholder="เบอร์โทร หรือ เลขบัตรประชาชน" style={iStyle}/></Field>
+          <Field label="ชื่อบัญชี"><input value={form.accountName||""} onChange={e=>upd("accountName",e.target.value)} placeholder="เช่น นาย สมชาย ใจดี" style={iStyle}/></Field>
+        </div>
+
+        <button onClick={()=>{onSave(form);setSaved(true);setTimeout(()=>setSaved(false),2000);}}
+          style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:11,padding:"12px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,marginBottom:16}}>
           {saved?<><CheckCircle size={16}/> บันทึกแล้ว!</>:"บันทึกการตั้งค่า"}
         </button>
+
+        {/* Danger zone */}
+        <div style={{background:"#FFF8F2",border:"1px solid #FCA5A5",borderRadius:14,padding:18}}>
+          <div style={{fontWeight:600,fontSize:13,color:"#C84B4B",marginBottom:4}}>โซนอันตราย</div>
+          <div style={{fontSize:12,color:"#8C7C6C",marginBottom:12,lineHeight:1.6}}>ล้างประวัติการขายและบัญชีทั้งหมด<br/>เมนูสินค้าและการตั้งค่าจะยังคงอยู่ครบ</div>
+          {!showClear
+            ?<button onClick={()=>setShowClear(true)} style={{background:"#FDE8E8",color:"#C84B4B",border:"1px solid #FCA5A5",borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>ล้างประวัติการขาย...</button>
+            :<div>
+              <div style={{fontSize:13,color:"#C84B4B",marginBottom:8,fontWeight:600}}>พิมพ์รหัสยืนยัน</div>
+              <input value={pin} onChange={e=>{setPin(e.target.value);setPinErr(false);}} placeholder='พิมพ์ "CLEARDATA"' style={{...iStyle,marginBottom:8,border:`1px solid ${pinErr?"#C84B4B":"#D4C4B0"}`,background:pinErr?"#FFF0F0":"#F5F0EA"}}/>
+              {pinErr&&<div style={{fontSize:12,color:"#C84B4B",marginBottom:8}}>รหัสไม่ถูกต้อง ลองใหม่</div>}
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{setShowClear(false);setPin("");setPinErr(false);}} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:9,padding:"9px",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
+                <button onClick={handleClear} style={{flex:1,background:"#C84B4B",color:"#FFF",border:"none",borderRadius:9,padding:"9px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>ยืนยัน</button>
+              </div>
+            </div>}
+        </div>
       </div>
 
-      {/* ── โซนอันตราย ── */}
-      <div style={{marginTop:24,background:"#FFF8F2",border:"1px solid #FCA5A5",borderRadius:14,padding:22}}>
-        <div style={{fontWeight:600,fontSize:14,color:"#C84B4B",marginBottom:4}}>โซนอันตราย</div>
-        <div style={{fontSize:13,color:"#8C7C6C",marginBottom:14,lineHeight:1.6}}>ล้างประวัติการขายและบัญชีทั้งหมด<br/>เมนูสินค้าและการตั้งค่าจะยังคงอยู่ครบ</div>
-        {!showClear
-          ?<button onClick={()=>setShowClear(true)} style={{background:"#FDE8E8",color:"#C84B4B",border:"1px solid #FCA5A5",borderRadius:10,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>ล้างประวัติการขาย...</button>
-          :<div>
-            <div style={{fontSize:13,color:"#C84B4B",marginBottom:8,fontWeight:600}}>พิมพ์รหัสยืนยัน เพื่อดำเนินการต่อ</div>
-            <input value={pin} onChange={e=>{setPin(e.target.value);setPinErr(false);}} placeholder='พิมพ์ "CLEARDATA"' style={{...iStyle,marginBottom:8,border:`1px solid ${pinErr?"#C84B4B":"#D4C4B0"}`,background:pinErr?"#FFF0F0":"#F5F0EA"}}/>
-            {pinErr&&<div style={{fontSize:12,color:"#C84B4B",marginBottom:8}}>รหัสไม่ถูกต้อง ลองใหม่อีกครั้ง</div>}
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>{setShowClear(false);setPin("");setPinErr(false);}} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"10px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
-              <button onClick={handleClear} style={{flex:1,background:"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>ยืนยันล้างข้อมูล</button>
+      {/* ── RIGHT: Live Preview ── */}
+      <div style={{flex:1,height:"100%",overflowY:"auto",padding:"24px 28px",background:"#EDE6DC",display:"flex",flexDirection:"column",alignItems:"center"}}>
+        <div style={{fontWeight:700,fontSize:15,color:"#6B4F3A",marginBottom:18,alignSelf:"flex-start"}}>ตัวอย่างบิล (Live Preview)</div>
+
+        {/* Receipt paper */}
+        <div style={{background:"#fff",borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:360,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center"}}>
+
+          {/* Header */}
+          {form.logo?<><img src={form.logo} alt="logo" style={{width:64,height:64,objectFit:"contain",margin:"0 auto 8px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{form.shopName||"ชื่อร้าน"}</div></>
+            :<div style={{fontWeight:700,fontSize:20,letterSpacing:"0.03em"}}>{form.shopName||"ชื่อร้าน"}</div>}
+          {form.staffName&&<div style={{fontSize:12,color:"#555",marginTop:2}}>พนักงาน: {form.staffName}</div>}
+          {form.address&&<div style={{fontSize:11,color:"#555",marginTop:3}}>{form.address}</div>}
+          {form.contact&&<div style={{fontSize:11,color:"#555",marginTop:2}}>{form.contact}</div>}
+          <div style={{fontSize:12,color:"#555",marginTop:4}}>ใบเสร็จรับเงิน / Receipt</div>
+
+          <div style={{borderTop:"1px dashed #ccc",margin:"10px 0"}}/>
+
+          <div style={{textAlign:"left",fontSize:12,color:"#333",lineHeight:1.9}}>
+            <div>เลขที่บิล: <b>#001</b></div>
+            <div>วันที่: {fmtDate(todayStr())}</div>
+            <div>เวลา: {fmtTime(new Date().toISOString())}</div>
+          </div>
+
+          <div style={{borderTop:"1px dashed #ccc",margin:"10px 0"}}/>
+
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,textAlign:"left",tableLayout:"fixed"}}>
+            <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
+            <thead><tr style={{borderBottom:"1px solid #ddd"}}><th style={{padding:"3px 0",fontWeight:600}}>รายการ</th><th style={{textAlign:"center",fontWeight:600}}>จำนวน</th><th style={{textAlign:"right",fontWeight:600}}>ราคา</th></tr></thead>
+            <tbody>
+              <tr><td style={{padding:"3px 0"}}>อเมริกาโน่ (เย็น)</td><td style={{textAlign:"center"}}>1 แก้ว</td><td style={{textAlign:"right",fontWeight:600}}>฿35</td></tr>
+              <tr><td style={{padding:"3px 0"}}>ลาเต้ (ร้อน) <div style={{fontSize:10,color:"#888"}}>— หวานน้อย</div></td><td style={{textAlign:"center"}}>1 แก้ว</td><td style={{textAlign:"right",fontWeight:600}}>฿50</td></tr>
+            </tbody>
+          </table>
+
+          <div style={{borderTop:"1px solid #ccc",marginTop:8,paddingTop:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿85</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:previewQR?"#1D4ED8":"#166534",fontWeight:600}}>{previewQR?"โอนจ่าย":"เงินสด"}</span></div>
+          </div>
+
+          {/* QR preview */}
+          {previewQR&&<>
+            <div style={{borderTop:"1px dashed #ccc",margin:"12px 0"}}/>
+            <div style={{textAlign:"center"}}>
+              {form.accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:13,fontWeight:700,marginBottom:8}}>{form.accountName}</div></>}
+              <QRCodeSVG value={previewQR} size={130} style={{display:"block",margin:"0 auto"}}/>
+              <div style={{fontSize:16,fontWeight:700,marginTop:6}}>฿85</div>
+              <div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div>
             </div>
-          </div>}
+          </>}
+
+          <div style={{borderTop:"1px dashed #ccc",margin:"10px 0"}}/>
+          <div style={{fontSize:12,color:"#444"}}>{form.thankMsg||"ขอบคุณที่ใช้บริการ"}</div>
+          <div style={{fontSize:12,color:"#555",marginTop:3}}>★ {form.shopName||"ชื่อร้าน"} ★</div>
+        </div>
+
+        <div style={{fontSize:12,color:"#9C8C7C",marginTop:14,textAlign:"center"}}>ตัวอย่างใช้ยอดสมมติ ฿85<br/>QR จะ generate ตามยอดจริงเมื่อชำระเงิน</div>
       </div>
     </div>
   );
 }
-
 // ══════════════════════════════════════════════════
 // PAYMENT & CHANGE MODALS
 // ══════════════════════════════════════════════════
