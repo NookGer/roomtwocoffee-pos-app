@@ -1954,7 +1954,7 @@ function Overlay({ children, onClose, wide }) {
           background: "#FFFCF8",
           borderRadius: 20,
           padding: 26,
-          width: wide ? 680 : 390,
+          width: wide ? 660 : 390,
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 28px 72px rgba(0,0,0,.3)",
@@ -6016,7 +6016,7 @@ function ChangeModal({ modal, onDismiss }) {
               padding: "20px 18px",
               textAlign: "center",
               width: "100%",
-              maxWidth: "340px",
+              maxWidth: "600px",
               margin: "0 auto",
               boxSizing: "border-box",
             }}
