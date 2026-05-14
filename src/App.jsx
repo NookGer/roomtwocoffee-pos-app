@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 // ── PromptPay QR generator — EMVCo standard (PromptPay Thailand) ──
 function generatePromptPayQR(phoneOrId, amount) {
@@ -1468,7 +1468,7 @@ function ChangeModal({modal,onDismiss}){
                 <div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div>
                 <div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div>
               </>}
-              <QRCodeSVG value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/>
+              <QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/>
               <div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div>
               <div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div>
             </div>
