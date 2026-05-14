@@ -397,7 +397,7 @@ function PosView({sortedCats,catProducts,activeCat,setActive,cart,cartTotal,cart
 }
 
 // ══════════════════════════════════════════════════
-// ORDER MODAL  (3 sections: Add-on | ตัวเลือกฟรี | ส่วนลด)
+// ORDER MODAL  (3 sections: Add-on | ตัวเลือกเสริม | ส่วนลด)
 // ══════════════════════════════════════════════════
 function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=[],initFree=[],initDis=[]}){
   const {addons,freeOpts,discounts}=linked;
@@ -549,7 +549,7 @@ function CartItem({item,onQty,onDone,onEdit}){
 }
 
 // ══════════════════════════════════════════════════
-// MANAGE VIEW — tabs: หมวดหมู่ | สินค้า | Add-on | ตัวเลือกฟรี | ส่วนลด
+// MANAGE VIEW — tabs: หมวดหมู่ | สินค้า | Add-on | ตัวเลือกเสริม | ส่วนลด
 // ══════════════════════════════════════════════════
 function ManageView({data,persist,onClearData}){
   const [tab,setTab]=useState("cats");
@@ -579,10 +579,10 @@ function ManageView({data,persist,onClearData}){
   const catDel =id=>confirm("ลบหมวดหมู่นี้?",()=>{persist({...data,categories:data.categories.filter(c=>c.id!==id),products:data.products.filter(p=>p.categoryId!==id)},true);if(filterCat===id)setFlt(null);});
   const prodDel=id=>confirm("ลบสินค้านี้?",()=>persist({...data,products:data.products.filter(p=>p.id!==id)},true));
   const aoDel  =id=>confirm("ลบ Add-on?",()=>persist({...data,addons:addons.filter(a=>a.id!==id)},true));
-  const foDel  =id=>confirm("ลบตัวเลือกฟรี?",()=>persist({...data,freeOpts:freeOpts.filter(f=>f.id!==id)},true));
+  const foDel  =id=>confirm("ลบตัวเลือกเสริม?",()=>persist({...data,freeOpts:freeOpts.filter(f=>f.id!==id)},true));
   const disDel =id=>confirm("ลบส่วนลด?",()=>persist({...data,discounts:discounts.filter(d=>d.id!==id)},true));
 
-  const TABS=[["cats","📂 หมวดหมู่"],["prods","☕ สินค้า"],["addons","🏷️ Add-on"],["freeopts","🎁 ตัวเลือกฟรี"],["discounts","🏷️ ส่วนลด"]];
+  const TABS=[["cats","📂 หมวดหมู่"],["prods","☕ สินค้า"],["addons","🏷️ Add-on"],["freeopts","ตัวเลือกเสริม"],["discounts","🏷️ ส่วนลด"]];
 
   return (
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
@@ -593,7 +593,7 @@ function ManageView({data,persist,onClearData}){
         {tab==="cats"     &&<AddBtn onClick={()=>setIM({type:"addCat"})}>เพิ่มหมวดหมู่</AddBtn>}
         {tab==="prods"    &&<AddBtn onClick={()=>setIM({type:"addProd",catId:filterCat||data.categories[0]?.id})}>เพิ่มสินค้า</AddBtn>}
         {tab==="addons"   &&<AddBtn onClick={()=>setIM({type:"addAddon"})}>เพิ่ม Add-on</AddBtn>}
-        {tab==="freeopts" &&<AddBtn color="#4A7C6B" onClick={()=>setIM({type:"addFreeOpt"})}>เพิ่มตัวเลือกฟรี</AddBtn>}
+        {tab==="freeopts" &&<AddBtn color="#4A7C6B" onClick={()=>setIM({type:"addFreeOpt"})}>เพิ่มตัวเลือกเสริม</AddBtn>}
         {tab==="discounts"&&<AddBtn color="#C84B4B" onClick={()=>setIM({type:"addDiscount"})}>เพิ่มส่วนลด</AddBtn>}
       </div>
       {(tab==="cats"||tab==="prods")&&<div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#9C8C7C",marginBottom:14,background:"#EDE6DC",borderRadius:8,padding:"5px 11px",width:"fit-content"}}><GripVertical size={12}/> ลากเพื่อจัดลำดับ</div>}
@@ -663,7 +663,7 @@ function ManageView({data,persist,onClearData}){
 
       {/* FREE OPTIONS */}
       {tab==="freeopts"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {freeOpts.length===0&&<EmptyMsg label="ยังไม่มีตัวเลือกฟรี"/>}
+        {freeOpts.length===0&&<EmptyMsg label="ยังไม่มีตัวเลือกเสริม"/>}
         {freeOpts.map(fo=>(
           <div key={fo.id} style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:"12px 14px"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
@@ -730,7 +730,7 @@ function AddonFormModal({addon,data,persist,onClose}){
     persist({...data,addons:addon?list.map(a=>a.id===addon.id?item:a):[...list,item]},true);
     onClose();
   };
-  return(<div><ModalTitle>{addon?"✏️ แก้ไข":"🏷️ เพิ่ม"} Add-on</ModalTitle>
+  return(<div><ModalTitle>{addon?"แก้ไข":"เพิ่ม"} Add-on</ModalTitle>
     <Field label="ชื่อ Add-on"><input value={name} onChange={e=>setName(e.target.value)} placeholder="เช่น เพิ่มช็อต" style={iStyle}/></Field>
     <Field label="ราคาที่บวกเพิ่ม (฿)"><input type="number" value={price} onChange={e=>setPrice(e.target.value)} placeholder="10" style={iStyle}/></Field>
     <ModalFooter onCancel={onClose} onSave={save}/></div>);
@@ -752,7 +752,7 @@ function FreeOptModal({fo,data,persist,onClose}){
     onClose();
   };
   return(<div>
-    <ModalTitle>{fo?"✏️ แก้ไข":"🎁 เพิ่ม"}ตัวเลือกฟรี</ModalTitle>
+    <ModalTitle>{fo?"แก้ไข":"เพิ่ม"}ตัวเลือกเสริม</ModalTitle>
     <Field label="ชื่อกลุ่ม (เช่น ระดับความหวาน)"><input value={groupName} onChange={e=>setGN(e.target.value)} placeholder="เช่น ความหวาน" style={iStyle}/></Field>
     <Field label="ตัวเลือกในกลุ่ม">
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -779,7 +779,7 @@ function DiscountModal({discount,data,persist,onClose}){
     persist({...data,discounts:discount?list.map(d=>d.id===discount.id?item:d):[...list,item]},true);
     onClose();
   };
-  return(<div><ModalTitle>{discount?"✏️ แก้ไข":"🏷️ เพิ่ม"}ส่วนลด</ModalTitle>
+  return(<div><ModalTitle>{discount?"แก้ไข":"เพิ่ม"}ส่วนลด</ModalTitle>
     <Field label="ชื่อส่วนลด (เช่น นำแก้วมาเอง)"><input value={name} onChange={e=>setName(e.target.value)} placeholder="เช่น นำแก้วมาเอง" style={iStyle}/></Field>
     <Field label="จำนวนเงินที่หักออก (฿)"><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="5" style={iStyle}/></Field>
     <ModalFooter onCancel={onClose} onSave={save}/></div>);
@@ -863,13 +863,13 @@ function ProdFormShell({initState,title,data,persist,onClose}){
       </div>
     </Field>
     <CheckRow label={<span><Tag size={12} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>Add-on ที่อนุญาต (บวกราคา)</span>} ids={linkedAddons} setIds={setLA} items={addons}/>
-    <CheckRow label={<span><Gift size={12} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>ตัวเลือกฟรีที่อนุญาต</span>} ids={linkedFreeOpts} setIds={setLF} items={freeOpts}/>
+    <CheckRow label={<span><Gift size={12} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>ตัวเลือกเสริมที่อนุญาต</span>} ids={linkedFreeOpts} setIds={setLF} items={freeOpts}/>
     <CheckRow label={<span><Percent size={12} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>ส่วนลดที่อนุญาต</span>} ids={linkedDiscounts} setIds={setLD} items={discounts}/>
     <ModalFooter onCancel={onClose} onSave={save}/>
   </div>);
 }
-function AddProdModal({data,persist,catId,onClose}){ return <ProdFormShell initState={{catId:catId||data.categories[0]?.id}} title="➕ เพิ่มสินค้า" data={data} persist={persist} onClose={onClose}/>; }
-function EditProdModal({prod,data,persist,onClose}){ return <ProdFormShell initState={{...prod,catId:prod.categoryId,vars:prod.variants.map(v=>({...v,price:String(v.price)}))}} title="✏️ แก้ไขสินค้า" data={data} persist={persist} onClose={onClose}/>; }
+function AddProdModal({data,persist,catId,onClose}){ return <ProdFormShell initState={{catId:catId||data.categories[0]?.id}} title="เพิ่มสินค้า" data={data} persist={persist} onClose={onClose}/>; }
+function EditProdModal({prod,data,persist,onClose}){ return <ProdFormShell initState={{...prod,catId:prod.categoryId,vars:prod.variants.map(v=>({...v,price:String(v.price)}))}} title="แก้ไขสินค้า" data={data} persist={persist} onClose={onClose}/>; }
 function AddCatModal({data,persist,onClose}){
   const [name,setName]=useState(""); const [color,setColor]=useState(PALETTE[0]);
   return(<div><ModalTitle>➕ เพิ่มหมวดหมู่</ModalTitle><Field label="ชื่อ"><input value={name} onChange={e=>setName(e.target.value)} placeholder="เช่น กาแฟ" style={iStyle}/></Field><Field label="สี"><ColorPicker value={color} onChange={setColor}/></Field><ModalFooter onCancel={onClose} onSave={()=>{if(!name.trim())return;persist({...data,categories:[...data.categories,{id:`cat${uid()}`,name:name.trim(),color,order:data.categories.length}]},true);onClose();}}/></div>);
