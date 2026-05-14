@@ -1,5 +1,13 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor,
+  useSensor, useSensors
+} from "@dnd-kit/core";
+import {
+  SortableContext, verticalListSortingStrategy, useSortable
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // ── PromptPay QR generator — EMVCo standard (PromptPay Thailand) ──
 function generatePromptPayQR(phoneOrId, amount) {
@@ -761,6 +769,49 @@ function CartItem({item,onQty,onDone,onEdit}){
   );
 }
 
+// ── Sortable Row Components (dnd-kit) ──
+function SortableCatRow({cat,productCount,onEdit,onDel}){
+  const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:cat.id});
+  const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
+  return(
+    <div ref={setNodeRef} style={{...style,display:"flex",alignItems:"center",gap:10,background:"#FFF8F2",border:`1.5px solid ${isDragging?"#D4A574":"#E8D8C8"}`,borderRadius:13,padding:"11px 14px",boxShadow:isDragging?"0 8px 24px rgba(0,0,0,.12)":undefined}}>
+      <div {...attributes} {...listeners} style={{cursor:"grab",touchAction:"none",padding:"4px",color:"#C4B4A0",display:"flex",alignItems:"center"}}>
+        <GripVertical size={20}/>
+      </div>
+      <div style={{width:18,height:18,borderRadius:5,background:cat.color,flexShrink:0}}/>
+      <span style={{flex:1,fontWeight:600,fontSize:14,color:"#2C1810"}}>{cat.name}</span>
+      <span style={{fontSize:12,color:"#9C8C7C"}}>{productCount} สินค้า</span>
+      <IconBtn variant="edit" onClick={e=>{e.stopPropagation();onEdit();}}><Pencil size={13}/></IconBtn>
+      <IconBtn variant="del"  onClick={e=>{e.stopPropagation();onDel();}}><Trash2 size={13}/></IconBtn>
+    </div>
+  );
+}
+
+function SortableProdRow({prod,cat,lc,onEdit,onDel}){
+  const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:prod.id});
+  const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
+  return(
+    <div ref={setNodeRef} style={{...style,display:"flex",alignItems:"center",gap:10,background:"#FFF8F2",border:`1.5px solid ${isDragging?"#D4A574":"#E8D8C8"}`,borderRadius:13,padding:"10px 14px",boxShadow:isDragging?"0 8px 24px rgba(0,0,0,.12)":undefined}}>
+      <div {...attributes} {...listeners} style={{cursor:"grab",touchAction:"none",padding:"4px",color:"#C4B4A0",display:"flex",alignItems:"center"}}>
+        <GripVertical size={20}/>
+      </div>
+      <div style={{width:38,height:38,borderRadius:9,background:prod.color,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {prod.image?<img src={prod.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:9,color:"rgba(255,255,255,.9)",fontWeight:700,textAlign:"center",padding:2}}>{prod.name.slice(0,5)}</span>}
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:600,color:"#2C1810"}}>{prod.name}{prod.unit&&<span style={{fontSize:11,color:"#8C7C6C",fontWeight:400}}> ({prod.unit})</span>}</div>
+        <div style={{fontSize:11,color:"#8C7C6C",display:"flex",gap:6,flexWrap:"wrap",marginTop:2,alignItems:"center"}}>
+          {cat&&<span style={{background:cat.color,color:"#FFF",borderRadius:10,padding:"1px 8px",fontSize:10}}>{cat.name}</span>}
+          {prod.variants.map(v=><span key={v.id}>{v.name} ฿{v.price}</span>)}
+          {lc>0&&<span style={{color:"#7941C8",fontSize:10}}>+{lc} ตัวเลือก</span>}
+        </div>
+      </div>
+      <IconBtn variant="edit" onClick={e=>{e.stopPropagation();onEdit();}}><Pencil size={13}/></IconBtn>
+      <IconBtn variant="del"  onClick={e=>{e.stopPropagation();onDel();}}><Trash2 size={13}/></IconBtn>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════
 // MANAGE VIEW — tabs: หมวดหมู่ | สินค้า | Add-on | ตัวเลือกเสริม | ส่วนลด
 // ══════════════════════════════════════════════════
@@ -773,27 +824,43 @@ function ManageView({data,persist}){
 
   useEffect(()=>{ if(tab==="prods"&&!filterCat&&sortedCats.length>0)setFlt(sortedCats[0].id); },[tab]);
   const catProds=filterCat?data.products.filter(p=>p.categoryId===filterCat).sort((a,b)=>a.order-b.order):[];
-  const drag=useRef({item:null,over:null});
-  const catDrop=()=>{
-    const{item,over}=drag.current; if(!item||item===over)return;
-    const arr=[...sortedCats]; const fi=arr.findIndex(x=>x.id===item); const ti=arr.findIndex(x=>x.id===over);
-    const[m]=arr.splice(fi,1); arr.splice(ti,0,m);
-    persist({...data,categories:reindex(arr)},true); drag.current={item:null,over:null};
-  };
-  const prodDrop=()=>{
-    const{item,over}=drag.current; if(!item||item===over)return;
-    const fi=catProds.findIndex(x=>x.id===item); const ti=catProds.findIndex(x=>x.id===over);
-    if(fi<0||ti<0)return;
-    const arr=[...catProds]; const[m]=arr.splice(fi,1); arr.splice(ti,0,m);
-    persist({...data,products:[...data.products.filter(p=>p.categoryId!==filterCat),...reindex(arr)]},true);
-    drag.current={item:null,over:null};
-  };
+
   const confirm=(msg,fn)=>setIM({type:"confirm",icon:<Trash2 size={36} color="#C84B4B" style={{margin:"0 auto 12px"}}/>,msg,confirmLabel:"ลบเลย",confirmColor:"#C84B4B",onConfirm:fn});
   const catDel =id=>confirm("ลบหมวดหมู่นี้?",()=>{persist({...data,categories:data.categories.filter(c=>c.id!==id),products:data.products.filter(p=>p.categoryId!==id)},true);if(filterCat===id)setFlt(null);});
   const prodDel=id=>confirm("ลบสินค้านี้?",()=>persist({...data,products:data.products.filter(p=>p.id!==id)},true));
   const aoDel  =id=>confirm("ลบ Add-on?",()=>persist({...data,addons:addons.filter(a=>a.id!==id)},true));
   const foDel  =id=>confirm("ลบตัวเลือกเสริม?",()=>persist({...data,freeOpts:freeOpts.filter(f=>f.id!==id)},true));
   const disDel =id=>confirm("ลบส่วนลด?",()=>persist({...data,discounts:discounts.filter(d=>d.id!==id)},true));
+
+  // ── dnd-kit: Category sort ──
+  const catSensors=useSensors(
+    useSensor(PointerSensor,{activationConstraint:{distance:8}}),
+    useSensor(TouchSensor,{activationConstraint:{delay:200,tolerance:8}})
+  );
+  const handleCatDragEnd=(event)=>{
+    const{active,over}=event;
+    if(!over||active.id===over.id)return;
+    const arr=[...sortedCats];
+    const fi=arr.findIndex(x=>x.id===active.id);
+    const ti=arr.findIndex(x=>x.id===over.id);
+    const[m]=arr.splice(fi,1); arr.splice(ti,0,m);
+    persist({...data,categories:reindex(arr)},true);
+  };
+
+  // ── dnd-kit: Product sort ──
+  const prodSensors=useSensors(
+    useSensor(PointerSensor,{activationConstraint:{distance:8}}),
+    useSensor(TouchSensor,{activationConstraint:{delay:200,tolerance:8}})
+  );
+  const handleProdDragEnd=(event)=>{
+    const{active,over}=event;
+    if(!over||active.id===over.id)return;
+    const arr=[...catProds];
+    const fi=arr.findIndex(x=>x.id===active.id);
+    const ti=arr.findIndex(x=>x.id===over.id);
+    const[m]=arr.splice(fi,1); arr.splice(ti,0,m);
+    persist({...data,products:[...data.products.filter(p=>p.categoryId!==filterCat),...reindex(arr)]},true);
+  };
 
   const TABS=[["cats","📂 หมวดหมู่"],["prods","☕ สินค้า"],["addons","🏷️ Add-on"],["freeopts","ตัวเลือกเสริม"],["discounts","🏷️ ส่วนลด"]];
 
@@ -809,56 +876,47 @@ function ManageView({data,persist}){
         {tab==="freeopts" &&<AddBtn color="#4A7C6B" onClick={()=>setIM({type:"addFreeOpt"})}>เพิ่มตัวเลือกเสริม</AddBtn>}
         {tab==="discounts"&&<AddBtn color="#C84B4B" onClick={()=>setIM({type:"addDiscount"})}>เพิ่มส่วนลด</AddBtn>}
       </div>
-      {(tab==="cats"||tab==="prods")&&<div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#9C8C7C",marginBottom:14,background:"#EDE6DC",borderRadius:8,padding:"5px 11px",width:"fit-content"}}><GripVertical size={12}/> ลากเพื่อจัดลำดับ</div>}
+      {(tab==="cats"||tab==="prods")&&<div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#9C8C7C",marginBottom:14,background:"#EDE6DC",borderRadius:8,padding:"5px 11px",width:"fit-content"}}><GripVertical size={12}/> กดค้างที่ ≡ แล้วลากเพื่อจัดลำดับ</div>}
 
-      {/* CATEGORIES */}
-      {tab==="cats"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {sortedCats.length===0&&<EmptyMsg label="ยังไม่มีหมวดหมู่"/>}
-        {sortedCats.map(cat=>(
-          <div key={cat.id} draggable onDragStart={()=>drag.current.item=cat.id} onDragEnter={()=>drag.current.over=cat.id} onDragEnd={catDrop} onDragOver={e=>e.preventDefault()}
-            style={{display:"flex",alignItems:"center",gap:10,background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:"11px 14px",cursor:"grab",transition:"background .15s"}}>
-            <GripVertical size={16} color="#C4B4A0"/>
-            <div style={{width:18,height:18,borderRadius:5,background:cat.color,flexShrink:0}}/>
-            <span style={{flex:1,fontWeight:600,fontSize:14,color:"#2C1810"}}>{cat.name}</span>
-            <span style={{fontSize:12,color:"#9C8C7C"}}>{data.products.filter(p=>p.categoryId===cat.id).length} สินค้า</span>
-            <IconBtn variant="edit" onClick={e=>{e.stopPropagation();setIM({type:"editCat",cat});}}><Pencil size={13}/></IconBtn>
-            <IconBtn variant="del"  onClick={e=>{e.stopPropagation();catDel(cat.id);}}><Trash2 size={13}/></IconBtn>
-          </div>
-        ))}
-      </div>}
+      {/* CATEGORIES — dnd-kit */}
+      {tab==="cats"&&(
+        <DndContext sensors={catSensors} collisionDetection={closestCenter} onDragEnd={handleCatDragEnd}>
+          <SortableContext items={sortedCats.map(c=>c.id)} strategy={verticalListSortingStrategy}>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {sortedCats.length===0&&<EmptyMsg label="ยังไม่มีหมวดหมู่"/>}
+              {sortedCats.map(cat=>(
+                <SortableCatRow key={cat.id} cat={cat}
+                  productCount={data.products.filter(p=>p.categoryId===cat.id).length}
+                  onEdit={()=>setIM({type:"editCat",cat})}
+                  onDel={()=>catDel(cat.id)}/>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
 
-      {/* PRODUCTS */}
+      {/* PRODUCTS — dnd-kit */}
       {tab==="prods"&&<>
         <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:16}}>
           {sortedCats.map(c=><ChipBtn key={c.id} active={filterCat===c.id} onClick={()=>setFlt(c.id)} color={c.color}>{c.name}</ChipBtn>)}
         </div>
         {!filterCat?<EmptyMsg label="เลือกหมวดหมู่เพื่อดูสินค้า"/>
           :catProds.length===0?<EmptyMsg label="ยังไม่มีสินค้าในหมวดนี้"/>
-          :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {catProds.map(p=>{
-              const cat=data.categories.find(c=>c.id===p.categoryId);
-              const lc=(p.linkedAddons?.length||0)+(p.linkedFreeOpts?.length||0)+(p.linkedDiscounts?.length||0);
-              return (
-                <div key={p.id} draggable onDragStart={()=>drag.current.item=p.id} onDragEnter={()=>drag.current.over=p.id} onDragEnd={prodDrop} onDragOver={e=>e.preventDefault()}
-                  style={{display:"flex",alignItems:"center",gap:10,background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:"10px 14px",cursor:"grab",transition:"background .15s"}}>
-                  <GripVertical size={16} color="#C4B4A0"/>
-                  <div style={{width:38,height:38,borderRadius:9,background:p.color,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    {p.image?<img src={p.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:9,color:"rgba(255,255,255,.9)",fontWeight:700,textAlign:"center",padding:2}}>{p.name.slice(0,5)}</span>}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:"#2C1810"}}>{p.name}{p.unit&&<span style={{fontSize:11,color:"#8C7C6C",fontWeight:400}}> ({p.unit})</span>}</div>
-                    <div style={{fontSize:11,color:"#8C7C6C",display:"flex",gap:6,flexWrap:"wrap",marginTop:2,alignItems:"center"}}>
-                      {cat&&<span style={{background:cat.color,color:"#FFF",borderRadius:10,padding:"1px 8px",fontSize:10}}>{cat.name}</span>}
-                      {p.variants.map(v=><span key={v.id}>{v.name} ฿{v.price}</span>)}
-                      {lc>0&&<span style={{color:"#7941C8",fontSize:10}}>+{lc} ตัวเลือก</span>}
-                    </div>
-                  </div>
-                  <IconBtn variant="edit" onClick={e=>{e.stopPropagation();setIM({type:"editProd",prod:p});}}><Pencil size={13}/></IconBtn>
-                  <IconBtn variant="del"  onClick={e=>{e.stopPropagation();prodDel(p.id);}}><Trash2 size={13}/></IconBtn>
-                </div>
-              );
-            })}
-          </div>}
+          :<DndContext sensors={prodSensors} collisionDetection={closestCenter} onDragEnd={handleProdDragEnd}>
+            <SortableContext items={catProds.map(p=>p.id)} strategy={verticalListSortingStrategy}>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {catProds.map(p=>{
+                  const cat=data.categories.find(c=>c.id===p.categoryId);
+                  const lc=(p.linkedAddons?.length||0)+(p.linkedFreeOpts?.length||0)+(p.linkedDiscounts?.length||0);
+                  return(
+                    <SortableProdRow key={p.id} prod={p} cat={cat} lc={lc}
+                      onEdit={()=>setIM({type:"editProd",prod:p})}
+                      onDel={()=>prodDel(p.id)}/>
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>}
       </>}
 
       {/* ADD-ONS */}
