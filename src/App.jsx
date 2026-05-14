@@ -1027,26 +1027,30 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
           <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:700,fontSize:14,color:"#2C1810"}}><Receipt size={16}/> ประวัติออเดอร์<span style={{background:"#2C1810",color:"#FFF",borderRadius:20,padding:"1px 10px",fontSize:11}}>{allOrders.length}</span>{allOrders.filter(o=>o.isCanceled).length>0&&<span style={{background:"#FDE8E8",color:"#C84B4B",borderRadius:20,padding:"1px 10px",fontSize:11}}>ยกเลิก {allOrders.filter(o=>o.isCanceled).length}</span>}</div>
           {histOpen?<ChevronUp size={16} color="#8C7C6C"/>:<ChevronDown size={16} color="#8C7C6C"/>}
         </div>
-        {histOpen&&<div style={{padding:"0 18px 14px"}}>
+        {histOpen&&<div>
           {allOrders.length===0&&<div style={{textAlign:"center",color:"#9C8C7C",padding:"24px 0",fontSize:13}}>ไม่มีออเดอร์</div>}
-          {[...allOrders].reverse().map(order=>(
-            <div key={order.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #EDE4DA",opacity:order.isCanceled?0.6:1}}>
-              <div style={{width:4,borderRadius:4,alignSelf:"stretch",background:order.isCanceled?"#C84B4B":"#7A9E6B",flexShrink:0,minHeight:36}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
-                  <span style={{background:order.isCanceled?"#FDE8E8":"#EDE6DC",color:order.isCanceled?"#C84B4B":"#6B4F3A",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:700}}>{order.orderNum?fmtNum(order.orderNum):`#${order.id.slice(-4).toUpperCase()}`}</span>
-                  <span style={{fontSize:11,color:"#9C8C7C"}}>{fmtDate(order.date)} {fmtTime(order.ts)}</span>
-                  {order.isCanceled&&<span style={{background:"#FDE8E8",color:"#C84B4B",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}}>⊘ ยกเลิก</span>}
+          {/* จำกัดแสดง 5 รายการ scroll เฉพาะส่วน */}
+          <div style={{maxHeight:420,overflowY:"auto",padding:"0 18px"}}>
+            {[...allOrders].reverse().map(order=>(
+              <div key={order.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #EDE4DA",opacity:order.isCanceled?0.6:1}}>
+                <div style={{width:4,borderRadius:4,alignSelf:"stretch",background:order.isCanceled?"#C84B4B":"#7A9E6B",flexShrink:0,minHeight:36}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
+                    <span style={{background:order.isCanceled?"#FDE8E8":"#EDE6DC",color:order.isCanceled?"#C84B4B":"#6B4F3A",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:700}}>{order.orderNum?fmtNum(order.orderNum):`#${order.id.slice(-4).toUpperCase()}`}</span>
+                    <span style={{fontSize:11,color:"#9C8C7C"}}>{fmtDate(order.date)} {fmtTime(order.ts)}</span>
+                    {order.isCanceled&&<span style={{background:"#FDE8E8",color:"#C84B4B",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}}>⊘ ยกเลิก</span>}
+                  </div>
+                  <div style={{fontSize:11,color:"#8C7C6C",marginBottom:3,textDecoration:order.isCanceled?"line-through":"none"}}>{order.items.map(i=>`${i.name}(${i.variant})${i.note?` [${i.note}]`:""}×${i.qty}`).join(" · ")}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:order.isCanceled?"#C84B4B":"#6B4F3A"}}>{baht(order.total)}</div>
                 </div>
-                <div style={{fontSize:11,color:"#8C7C6C",marginBottom:3,textDecoration:order.isCanceled?"line-through":"none"}}>{order.items.map(i=>`${i.name}(${i.variant})${i.note?` [${i.note}]`:""}×${i.qty}`).join(" · ")}</div>
-                <div style={{fontSize:13,fontWeight:700,color:order.isCanceled?"#C84B4B":"#6B4F3A"}}>{baht(order.total)}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                  {!order.isCanceled&&<button onClick={()=>setConf({type:"viewReceipt",order,rcpt})} style={{background:"#EDE6DC",border:"none",borderRadius:8,padding:"5px 9px",fontSize:11,color:"#6B4F3A",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}><Eye size={11}/> บิล</button>}
+                  {!order.isCanceled&&<button onClick={()=>setConf({type:"void",id:order.id,orderNum:order.orderNum})} style={{background:"#FDE8E8",border:"none",borderRadius:8,padding:"5px 9px",fontSize:11,color:"#C84B4B",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}><Ban size={11}/> ยกเลิก</button>}
+                </div>
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
-                {!order.isCanceled&&<button onClick={()=>setConf({type:"viewReceipt",order,rcpt})} style={{background:"#EDE6DC",border:"none",borderRadius:8,padding:"5px 9px",fontSize:11,color:"#6B4F3A",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}><Eye size={11}/> บิล</button>}
-                {!order.isCanceled&&<button onClick={()=>setConf({type:"void",id:order.id,orderNum:order.orderNum})} style={{background:"#FDE8E8",border:"none",borderRadius:8,padding:"5px 9px",fontSize:11,color:"#C84B4B",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}><Ban size={11}/> ยกเลิก</button>}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          {allOrders.length>5&&<div style={{textAlign:"center",fontSize:11,color:"#9C8C7C",padding:"8px 0",borderTop:"1px solid #EDE4DA"}}>เลื่อนเพื่อดูทั้งหมด {allOrders.length} รายการ</div>}
         </div>}
       </div>
 
@@ -1254,19 +1258,25 @@ function ChangeModal({modal,onDismiss}){
   const shop=rcpt.shopName||"RoomTwo Coffee",staff=rcpt.staffName||"",thankMsg=rcpt.thankMsg||"ขอบคุณที่ใช้บริการ 🙏",logo=rcpt.logo||null;
   const isChange=modal.change!==undefined&&modal.received!==undefined;
   const saveJpg=async()=>{
-    setShowR(true);setSaving(true);await new Promise(r=>setTimeout(r,400));
+    setSaving(true);await new Promise(r=>setTimeout(r,400));
     try{if(window.html2canvas&&receiptRef.current){const c=await window.html2canvas(receiptRef.current,{backgroundColor:"#ffffff",scale:2.5,useCORS:true,logging:false});const a=document.createElement("a");a.download=`receipt-${order?.orderNum?String(order.orderNum).padStart(3,"0"):order?.id?.slice(-4)||"x"}-${order?.date||"x"}.jpg`;a.href=c.toDataURL("image/jpeg",.92);a.click();}}catch(e){}
     setSaving(false);
   };
   return(
     <div style={{textAlign:"center",padding:"4px 0"}}>
       {isChange&&<><div style={{fontSize:44,marginBottom:10}}>✅</div><div style={{fontWeight:700,fontSize:17,color:"#2C1810",marginBottom:4}}>ชำระเงินสำเร็จ</div><div style={{fontSize:12,color:"#8C7C6C",marginBottom:18}}>รับ {baht(modal.received)} · ยอด {baht(modal.total)}</div><div style={{background:"#F5F0EA",borderRadius:14,padding:"18px 22px",marginBottom:18}}><div style={{fontSize:13,color:"#8C7C6C",marginBottom:4}}>เงินทอน</div><div style={{fontSize:44,fontWeight:700,color:"#2C1810"}}>{baht(modal.change)}</div></div></>}
+
+      {/* ปุ่มหลัก: ดูบิล + รับทราบ/ปิด */}
       <div style={{display:"flex",gap:10,marginBottom:showR?16:0}}>
-        <button onClick={saveJpg} disabled={saving} style={{flex:1,background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:12,padding:"12px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:saving?0.7:1}}><ImageDown size={14}/>{saving?"กำลังบันทึก...":"บันทึกบิล (.jpg)"}</button>
+        <button onClick={()=>setShowR(!showR)}
+          style={{flex:1,background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:12,padding:"12px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <Eye size={14}/>{showR?"ซ่อนบิล":"ดูบิล"}
+        </button>
         <button onClick={onDismiss} style={{flex:1,background:"#2C1810",color:"#F5E8D8",border:"none",borderRadius:12,padding:"12px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{isChange?"รับทราบ":"ปิด"}</button>
       </div>
-      {showR&&order&&<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4C4B0"}}>
-        <div style={{background:"#EDE6DC",padding:"6px 14px",fontSize:11,color:"#6B4F3A",textAlign:"left",display:"flex",alignItems:"center",gap:5}}><ImageDown size={11}/> แคปหน้าจอส่งต่อได้เลย</div>
+
+      {/* ใบเสร็จ + ปุ่มบันทึก (แสดงเมื่อกด "ดูบิล") */}
+      {showR&&order&&<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4C4B0",marginBottom:4}}>
         <div ref={receiptRef} style={{background:"#fff",color:"#000",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%"}}>
           {logo?<><img src={logo} alt="logo" style={{width:70,height:70,objectFit:"contain",margin:"0 auto 6px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{shop}</div></>:<div style={{fontWeight:700,fontSize:19,letterSpacing:"0.04em"}}>{shop}</div>}
           {staff&&<div style={{fontSize:12,color:"#444",marginTop:2}}>พนักงาน: {staff}</div>}
@@ -1280,7 +1290,13 @@ function ChangeModal({modal,onDismiss}){
           <div style={{borderTop:"1px dashed #aaa",margin:"10px 0"}}/>
           <div style={{fontSize:12,color:"#444"}}>{thankMsg}</div><div style={{fontSize:12,color:"#555",marginTop:3}}>★ {shop} ★</div>
         </div>
-        <div style={{background:"#EDE6DC",padding:"5px 14px",display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setShowR(false)} style={{background:"none",border:"none",fontSize:12,color:"#6B4F3A",cursor:"pointer",fontFamily:"inherit"}}>ปิด</button></div>
+        {/* ปุ่มบันทึก — แสดงหลังดูบิลแล้ว */}
+        <div style={{background:"#EDE6DC",padding:"10px 14px"}}>
+          <button onClick={saveJpg} disabled={saving}
+            style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:saving?0.7:1}}>
+            <ImageDown size={14}/>{saving?"กำลังบันทึก...":"💾 บันทึกบิล (.jpg)"}
+          </button>
+        </div>
       </div>}
     </div>
   );
