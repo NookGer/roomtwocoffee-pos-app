@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 // ── PromptPay QR generator — EMVCo standard (PromptPay Thailand) ──
@@ -402,7 +402,7 @@ export default function App() {
       <div style={{background:"#2C1810",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,zIndex:100,minHeight:64,position:"sticky",top:0,width:"100%",boxSizing:"border-box"}}>
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
-        <SyncIndicator syncSt={syncSt} onRestore={handleRestore}/>
+        <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger}/>
         <div style={{flex:1}}/>
         <DatePill dispDate={dispDate} badge={badge} onChangeRequest={requestDateChange}/>
         {badge&&<button onClick={()=>{setDD(todayStr());setNN(peekOrderNum(todayStr()));}} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.2)",color:"#C8A882",borderRadius:20,padding:"7px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13}/> รีเซ็ต</button>}
@@ -461,21 +461,71 @@ export default function App() {
 }
 
 // ── SyncIndicator ──
-function SyncIndicator({syncSt,onRestore}){
+function SyncIndicator({syncSt,onRestore,orders,ledger}){
   const [open,setOpen]=useState(false);
   const isDev=window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1";
   const c=isDev
     ? {color:"#7941C8",label:"DEV MODE"}
     : ({synced:{color:"#6CC97A",label:"Synced"},syncing:{color:"#C8A841",label:"Syncing..."},offline:{color:"#C96C6C",label:"Offline"},error:{color:"#C96C6C",label:"Error"}}[syncSt.status]||{color:"#C8A882",label:""});
+
+  // คำนวณ % ความจุ 400 วัน จาก orders
+  const storageInfo = useMemo(()=>{
+    if(!orders||orders.length===0) return {pct:0,days:0,oldestDate:null};
+    const sorted=[...orders].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    const oldest=sorted[0];
+    const oldestDate=oldest.date||oldest.ts?.split("T")[0]||todayStr();
+    const msPerDay=1000*60*60*24;
+    const days=Math.floor((new Date()-new Date(oldestDate+"T00:00:00"))/msPerDay);
+    const pct=Math.min(100, Math.round(days/400*100));
+    return {pct,days,oldestDate};
+  },[orders]);
+
+  // สี circular progress ตาม %
+  const pctColor = storageInfo.pct>=90?"#C84B4B":storageInfo.pct>=70?"#C87941":"#6CC97A";
+
+  // SVG circular progress
+  const r=22, circ=2*Math.PI*r;
+  const dash=circ*(1-storageInfo.pct/100);
+
   return (
     <div style={{position:"relative"}}>
       <div onClick={()=>setOpen(!open)} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.07)",borderRadius:20,padding:"3px 10px",border:`1px solid ${isDev?"rgba(121,65,200,.5)":"rgba(255,255,255,.12)"}`,cursor:"pointer"}}>
         <div style={{width:7,height:7,borderRadius:"50%",background:c.color,boxShadow:`0 0 5px ${c.color}`,flexShrink:0}}/>
         <span style={{fontSize:11,color:c.color,whiteSpace:"nowrap"}}>{c.label}</span>
       </div>
-      {open&&<div style={{position:"absolute",top:"calc(100% + 8px)",left:0,background:"#2C1810",border:"1px solid rgba(255,255,255,.15)",borderRadius:12,padding:"12px 14px",minWidth:240,zIndex:999,boxShadow:"0 8px 24px rgba(0,0,0,.5)"}}>
-        {isDev&&<div style={{fontSize:12,color:"#C8A841",marginBottom:8,padding:"6px 10px",background:"rgba(121,65,200,.2)",borderRadius:8,lineHeight:1.5}}>🚫 DEV MODE<br/>Sync ถูกบล็อก ป้องกันทับข้อมูล Production</div>}
-        <div style={{fontSize:12,color:"#C8A882",marginBottom:10,lineHeight:1.6}}>{syncSt.lastSynced?`ซิงก์ล่าสุด:\n${fmtDT(syncSt.lastSynced)}`:"ยังไม่เคยซิงก์"}</div>
+      {open&&<div style={{position:"absolute",top:"calc(100% + 8px)",left:0,background:"#2C1810",border:"1px solid rgba(255,255,255,.15)",borderRadius:12,padding:"16px",minWidth:260,zIndex:999,boxShadow:"0 8px 24px rgba(0,0,0,.5)"}}>
+        {isDev&&<div style={{fontSize:12,color:"#C8A841",marginBottom:10,padding:"6px 10px",background:"rgba(121,65,200,.2)",borderRadius:8,lineHeight:1.5}}>🚫 DEV MODE — Sync ถูกบล็อก</div>}
+
+        {/* Circular Storage Indicator */}
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:12,padding:"10px 12px",background:"rgba(255,255,255,.06)",borderRadius:10}}>
+          {/* SVG Circle */}
+          <div style={{position:"relative",flexShrink:0}}>
+            <svg width={54} height={54} style={{transform:"rotate(-90deg)"}}>
+              {/* track */}
+              <circle cx={27} cy={27} r={r} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth={5}/>
+              {/* progress */}
+              <circle cx={27} cy={27} r={r} fill="none" stroke={pctColor} strokeWidth={5}
+                strokeDasharray={circ} strokeDashoffset={dash}
+                strokeLinecap="round"
+                style={{transition:"stroke-dashoffset .6s ease, stroke .3s ease"}}/>
+            </svg>
+            {/* % ตรงกลาง */}
+            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:pctColor}}>
+              {storageInfo.pct}%
+            </div>
+          </div>
+          {/* ข้อความข้างๆ */}
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:"#F5E8D8",marginBottom:3}}>ความจุข้อมูล</div>
+            <div style={{fontSize:11,color:"#C8A882",lineHeight:1.6}}>
+              {storageInfo.days} / 400 วัน<br/>
+              {storageInfo.oldestDate?<span>ข้อมูลเก่าสุด: {fmtDateS(storageInfo.oldestDate)}</span>:<span>ยังไม่มีออเดอร์</span>}
+            </div>
+            {storageInfo.pct>=90&&<div style={{fontSize:10,color:"#C84B4B",marginTop:4,fontWeight:600}}>⚠️ ใกล้ถึงรอบล้างข้อมูลเก่า</div>}
+          </div>
+        </div>
+
+        <div style={{fontSize:11,color:"#C8A882",marginBottom:10,lineHeight:1.6}}>{syncSt.lastSynced?`ซิงก์ล่าสุด: ${fmtDT(syncSt.lastSynced)}`:"ยังไม่เคยซิงก์"}</div>
         <button onClick={()=>{setOpen(false);onRestore();}} style={{width:"100%",background:"rgba(255,255,255,.1)",color:"#F5E8D8",border:"1px solid rgba(255,255,255,.2)",borderRadius:8,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Download size={12}/> ดึงข้อมูลจาก Supabase</button>
       </div>}
     </div>
