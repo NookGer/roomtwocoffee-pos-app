@@ -265,10 +265,10 @@ export default function App() {
   const badge=dateBadge(dispDate);
 
   return (
-    <div style={{fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",background:"#F5F0EA",minHeight:"100vh",display:"flex",flexDirection:"column",userSelect:"none"}}>
+    <div style={{fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",background:"#F5F0EA",height:"100vh",overflow:"hidden",display:"flex",flexDirection:"column",userSelect:"none"}}>
 
       {/* TOP BAR */}
-      <div style={{background:"#2C1810",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,zIndex:100,minHeight:64,position:"sticky",top:0}}>
+      <div style={{background:"#2C1810",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,zIndex:100,minHeight:64,position:"sticky",top:0,width:"100%",boxSizing:"border-box"}}>
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
         <SyncIndicator syncSt={syncSt} onRestore={handleRestore}/>
@@ -338,19 +338,18 @@ function PosView({sortedCats,catProducts,activeCat,setActive,cart,cartTotal,cart
   const unitLabel=cart.length===0?"":(()=>{const u={};cart.forEach(i=>{const k=i.unit||"รายการ";u[k]=(u[k]||0)+i.qty;});return Object.keys(u).map(k=>`${u[k]} ${k}`).join(", ");})();
   return (
     <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 64px)"}}>
-      {/* Categories — wider for iPad */}
-      <div style={{width:150,background:"#EDE6DC",borderRight:"1px solid #D4C4B0",overflowY:"auto",padding:"12px 8px",display:"flex",flexDirection:"column",gap:8,flexShrink:0}}>
+      {/* Categories — scroll independently */}
+      <div style={{width:150,height:"100%",background:"#EDE6DC",borderRight:"1px solid #D4C4B0",overflowY:"auto",padding:"12px 8px",display:"flex",flexDirection:"column",gap:8,flexShrink:0,boxSizing:"border-box"}}>
         {sortedCats.map(cat=>(
           <button key={cat.id} onClick={()=>setActive(cat.id)}
-            style={{background:activeCat===cat.id?cat.color:"transparent",color:activeCat===cat.id?"#FFF":"#5C4A36",border:`2px solid ${activeCat===cat.id?cat.color:"#C4B4A0"}`,borderRadius:12,padding:"14px 8px",fontSize:16,fontWeight:700,cursor:"pointer",textAlign:"center",transition:"all .18s",fontFamily:"inherit",width:"100%",lineHeight:1.3}}>
+            style={{background:activeCat===cat.id?cat.color:"transparent",color:activeCat===cat.id?"#FFF":"#5C4A36",border:`2px solid ${activeCat===cat.id?cat.color:"#C4B4A0"}`,borderRadius:12,padding:"14px 8px",fontSize:16,fontWeight:700,cursor:"pointer",textAlign:"center",transition:"all .18s",fontFamily:"inherit",width:"100%",lineHeight:1.3,flexShrink:0}}>
             {cat.name}
           </button>
         ))}
-        <div style={{flex:1}}/>
-        <button onClick={()=>setModal({type:"alert",msg:"ไปที่ 'จัดการ' เพื่อเพิ่มหมวดหมู่"})} style={{background:"none",border:"2px dashed #C4B4A0",borderRadius:12,padding:10,fontSize:13,color:"#9C8C7C",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4,fontFamily:"inherit"}}><Plus size={14}/> หมวดหมู่</button>
+        <div style={{flex:1,minHeight:8}}/>
       </div>
-      {/* Products — larger cards */}
-      <div style={{flex:1,overflowY:"auto",padding:16,background:"#F5F0EA"}}>
+      {/* Products — scroll independently */}
+      <div style={{flex:1,height:"100%",overflowY:"auto",padding:16,background:"#F5F0EA",boxSizing:"border-box"}}>
         {catProducts.length===0?<div style={{textAlign:"center",color:"#9C8C7C",marginTop:80,fontSize:18}}><Coffee size={48} style={{margin:"0 auto 16px",opacity:.35}}/><br/>ยังไม่มีสินค้า</div>
           :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:16}}>
             {catProducts.map(p=>{
@@ -368,9 +367,10 @@ function PosView({sortedCats,catProducts,activeCat,setActive,cart,cartTotal,cart
             })}
           </div>}
       </div>
-      {/* Cart — wider for iPad */}
-      <div style={{width:340,background:"#FFF8F2",borderLeft:"1px solid #E4D4C0",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"14px 16px",borderBottom:"1px solid #E4D4C0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {/* Cart — header fixed, items scroll, footer fixed */}
+      <div style={{width:340,height:"100%",background:"#FFF8F2",borderLeft:"1px solid #E4D4C0",display:"flex",flexDirection:"column",flexShrink:0}}>
+        {/* Header — stays at top always */}
+        <div style={{padding:"14px 16px",borderBottom:"1px solid #E4D4C0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#FFF8F2"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <ShoppingCart size={20} color="#6B4F3A"/>
             <span style={{fontWeight:700,fontSize:18,color:"#2C1810"}}>ออเดอร์</span>
@@ -378,11 +378,13 @@ function PosView({sortedCats,catProducts,activeCat,setActive,cart,cartTotal,cart
           </div>
           {cart.length>0&&<button onClick={()=>setCart([])} style={{background:"none",border:"none",color:"#C88C6C",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ล้างทั้งหมด</button>}
         </div>
+        {/* Items — scrollable */}
         <div style={{flex:1,overflowY:"auto",padding:"8px 12px"}}>
           {cart.length===0?<div style={{textAlign:"center",color:"#B8A898",marginTop:60,fontSize:16}}><ShoppingCart size={40} style={{margin:"0 auto 12px",opacity:.4}}/><br/>ยังไม่มีรายการ</div>
             :cart.map(item=><CartItem key={item.key} item={item} onQty={cartQty} onDone={cartDone} onEdit={openEditModal}/>)}
         </div>
-        <div style={{padding:"14px 16px",paddingBottom:"max(14px, env(safe-area-inset-bottom, 14px))",borderTop:"1px solid #E4D4C0"}}>
+        {/* Footer — stays at bottom always */}
+        <div style={{padding:"14px 16px",paddingBottom:"max(14px, env(safe-area-inset-bottom, 14px))",borderTop:"1px solid #E4D4C0",flexShrink:0,background:"#FFF8F2"}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,alignItems:"center"}}>
             <span style={{color:"#5C4A36",fontSize:14}}>{unitLabel||"ยังไม่มีรายการ"}</span>
             <span style={{fontWeight:700,fontSize:26,color:"#2C1810"}}>{baht(cartTotal)}</span>
@@ -1092,16 +1094,17 @@ function LedgerView({ledger,cash,data,dispDate,onUndoEntry,onAddCashTx}){
   },{revenue:0,cost:0,profit:0,units:0,expense:0,withdrawal:0});
 
   return(
-    <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 50px)"}}>
-      {/* LEFT 60% */}
-      <div style={{flex:"0 0 60%",overflowY:"auto",padding:"20px 18px",borderRight:"1px solid #E4D4C0",background:"#F5F0EA"}}>
+    <div style={{display:"flex",flex:1,height:"calc(100vh - 64px)",overflow:"hidden"}}>
+
+      {/* LEFT — scrollable, padded right so content doesn't hide under fixed sidebar */}
+      <div style={{flex:1,height:"100%",overflowY:"auto",padding:"20px 18px",paddingRight:"calc(40% + 18px)",borderRight:"none",background:"#F5F0EA"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
           <div style={{fontWeight:700,fontSize:18,color:"#2C1810",display:"flex",alignItems:"center",gap:7}}><BookOpen size={19} color="#D4A574"/> รายการบัญชี</div>
           <div style={{flex:1}}/>
           <label style={{display:"flex",alignItems:"center",gap:6,fontSize:13,color:"#5C4A36"}}><CalendarDays size={13}/><input type="date" value={ld} onChange={e=>setLd(e.target.value)} style={{padding:"4px 8px",borderRadius:8,border:"1px solid #D4C4B0",background:"#FFF8F2",color:"#2C1810",fontSize:13}}/></label>
         </div>
         {dayEntries.length===0?<EmptyMsg label="ยังไม่มีรายการบัญชีในวันนี้"/>:(
-          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {dayEntries.map(e=>{
               const info=TX_INFO[e.type]||{label:e.type,color:"#8C7C6C"};
               return(
@@ -1128,63 +1131,50 @@ function LedgerView({ledger,cash,data,dispDate,onUndoEntry,onAddCashTx}){
             })}
           </div>
         )}
-        {/* Daily summary */}
-        <div style={{background:"#2C1810",borderRadius:13,padding:"14px 16px"}}>
-          <div style={{fontWeight:700,fontSize:13,color:"#D4A574",marginBottom:10}}>สรุปยอดรายวัน — {fmtDateS(ld)}</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
-            {[["ยอดขาย",baht(ds.revenue),"#D4A574"],["ทุน",baht(ds.cost),"#C87941"],["กำไร",baht(ds.profit),ds.profit>=0?"#6CC97A":"#C96C6C"]].map(([l,v,c])=>(
-              <div key={l} style={{background:"rgba(255,255,255,.07)",borderRadius:9,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)"}}>{l}</div><div style={{fontSize:16,fontWeight:700,color:c}}>{v}</div></div>
-            ))}
-          </div>
-          {(ds.expense>0||ds.withdrawal>0)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <div style={{background:"rgba(255,255,255,.07)",borderRadius:9,padding:"7px 10px",textAlign:"center"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)"}}>รายจ่าย</div><div style={{fontSize:15,fontWeight:700,color:"#C87941"}}>-{baht(ds.expense)}</div></div>
-            <div style={{background:"rgba(255,255,255,.07)",borderRadius:9,padding:"7px 10px",textAlign:"center"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)"}}>ถอนกำไร</div><div style={{fontSize:15,fontWeight:700,color:"#7941C8"}}>-{baht(ds.withdrawal)}</div></div>
-          </div>}
-        </div>
       </div>
 
-      {/* RIGHT 40% */}
-      <div style={{flex:"0 0 40%",overflowY:"auto",padding:"20px 16px",background:"#FFF8F2"}}>
-        <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:14,display:"flex",alignItems:"center",gap:7}}><Wallet size={17} color="#D4A574"/> บริหารเงินสด</div>
-        {/* Total */}
-        <div style={{background:"#2C1810",borderRadius:14,padding:"16px",marginBottom:12,textAlign:"center"}}>
-          <div style={{fontSize:12,color:"#C8A882",marginBottom:6}}>ยอดเงินรวม (ทุน + กำไร)</div>
-          <div style={{fontSize:32,fontWeight:700,color:"#D4A574"}}>{baht(cash.total)}</div>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-          {[["เงินทุนคงเหลือ",cash.capital,"#C87941",<PiggyBank size={16}/>],["กำไรสะสม",cash.profit,cash.profit>=0?"#3A7A3A":"#C84B4B",<ArrowUpCircle size={16}/>]].map(([l,v,c,ic])=>(
-            <div key={l} style={{background:"#F5F0EA",border:"1px solid #E8D8C8",borderRadius:13,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
-              <div style={{color:c}}>{ic}</div><div style={{flex:1}}><div style={{fontSize:11,color:"#8C7C6C"}}>{l}</div><div style={{fontSize:22,fontWeight:700,color:c}}>{baht(v)}</div></div>
+      {/* RIGHT — fixed to viewport, never scrolls with left */}
+      <div style={{position:"fixed",top:64,right:0,width:"40%",height:"calc(100vh - 64px)",overflowY:"auto",background:"#FFF8F2",borderLeft:"1px solid #E4D4C0",padding:"20px 16px",paddingTop:"24px",display:"flex",flexDirection:"column",gap:12}}>
+
+          {/* 1. สรุปยอดรายวัน (ย้ายมาจากฝั่งซ้าย — อยู่บนสุด) */}
+          <div style={{background:"#2C1810",borderRadius:13,padding:"14px 16px"}}>
+            <div style={{fontWeight:700,fontSize:13,color:"#D4A574",marginBottom:10}}>สรุปยอดรายวัน — {fmtDateS(ld)}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:(ds.expense>0||ds.withdrawal>0)?8:0}}>
+              {[["ยอดขาย",baht(ds.revenue),"#D4A574"],["ทุน",baht(ds.cost),"#C87941"],["กำไร",baht(ds.profit),ds.profit>=0?"#6CC97A":"#C96C6C"]].map(([l,v,c])=>(
+                <div key={l} style={{background:"rgba(255,255,255,.07)",borderRadius:9,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)"}}>{l}</div><div style={{fontSize:16,fontWeight:700,color:c}}>{v}</div></div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-          <button onClick={()=>setCm("init")}       style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Settings size={14}/> ตั้งค่าเงินเริ่มต้น</button>
-          <button onClick={()=>setCm("expense")}    style={{background:"#C87941",color:"#FFF",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><ArrowDownCircle size={14}/> จ่ายทุน (Expense)</button>
-          <button onClick={()=>setCm("withdrawal")} style={{background:"#7941C8",color:"#FFF",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><ArrowUpCircle size={14}/> ถอนกำไร (Withdrawal)</button>
-        </div>
-        {/* Cash tx history */}
-        {cashTxAll.length>0&&<div>
-          <div style={{fontWeight:600,fontSize:13,color:"#2C1810",marginBottom:10,display:"flex",alignItems:"center",gap:6}}><History size={14}/> ประวัติการขยับเงิน</div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {cashTxAll.slice(0,10).map(e=>{
-              const info=TX_INFO[e.type]||{label:e.type,color:"#8C7C6C"};
-              return(
-                <div key={e.id} style={{background:"#F5F0EA",borderRadius:10,padding:"9px 12px",display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:info.color,flexShrink:0}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"#2C1810"}}>{info.label}</div>
-                    <div style={{fontSize:11,color:"#8C7C6C"}}>{fmtDT(e.ts)}</div>
-                    {e.type==="initial"&&<div style={{fontSize:11,color:"#4179C8"}}>ทุน {baht(e.capital)} · กำไร {baht(e.profit)}</div>}
-                    {e.type==="expense"&&<div style={{fontSize:11,color:"#C87941",fontWeight:700}}>-{baht(e.amount)}{e.desc?` — ${e.desc}`:""}</div>}
-                    {e.type==="withdrawal"&&<div style={{fontSize:11,color:"#7941C8",fontWeight:700}}>-{baht(e.amount)}</div>}
-                  </div>
-                  <button onClick={()=>setCu(e)} style={{background:"#FDE8E8",border:"none",borderRadius:7,padding:"4px 7px",cursor:"pointer",color:"#C84B4B",fontSize:10,fontFamily:"inherit",display:"flex",alignItems:"center",gap:2}}><Undo2 size={10}/> ยกเลิก</button>
-                </div>
-              );
-            })}
+            {(ds.expense>0||ds.withdrawal>0)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div style={{background:"rgba(255,255,255,.07)",borderRadius:9,padding:"7px 10px",textAlign:"center"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)"}}>รายจ่าย</div><div style={{fontSize:15,fontWeight:700,color:"#C87941"}}>-{baht(ds.expense)}</div></div>
+              <div style={{background:"rgba(255,255,255,.07)",borderRadius:9,padding:"7px 10px",textAlign:"center"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)"}}>ถอนกำไร</div><div style={{fontSize:15,fontWeight:700,color:"#7941C8"}}>-{baht(ds.withdrawal)}</div></div>
+            </div>}
           </div>
-        </div>}
+
+          {/* 2. หัวข้อ */}
+          <div style={{fontWeight:700,fontSize:16,color:"#2C1810",display:"flex",alignItems:"center",gap:7}}><Wallet size={17} color="#D4A574"/> บริหารเงินสด</div>
+
+          {/* 3. ยอดเงินรวม */}
+          <div style={{background:"#2C1810",borderRadius:14,padding:"16px",textAlign:"center"}}>
+            <div style={{fontSize:12,color:"#C8A882",marginBottom:6}}>ยอดเงินรวม (ทุน + กำไร)</div>
+            <div style={{fontSize:32,fontWeight:700,color:"#D4A574"}}>{baht(cash.total)}</div>
+          </div>
+
+          {/* 4. เงินทุน / กำไรสะสม */}
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {[["เงินทุนคงเหลือ",cash.capital,"#C87941",<PiggyBank size={16}/>],["กำไรสะสม",cash.profit,cash.profit>=0?"#3A7A3A":"#C84B4B",<ArrowUpCircle size={16}/>]].map(([l,v,c,ic])=>(
+              <div key={l} style={{background:"#F5F0EA",border:"1px solid #E8D8C8",borderRadius:13,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{color:c}}>{ic}</div><div style={{flex:1}}><div style={{fontSize:11,color:"#8C7C6C"}}>{l}</div><div style={{fontSize:22,fontWeight:700,color:c}}>{baht(v)}</div></div>
+              </div>
+            ))}
+          </div>
+
+          {/* 5. ปุ่มดำเนินการ */}
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <button onClick={()=>setCm("init")}       style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Settings size={14}/> ตั้งค่าเงินเริ่มต้น</button>
+            <button onClick={()=>setCm("expense")}    style={{background:"#C87941",color:"#FFF",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><ArrowDownCircle size={14}/> จ่ายทุน (Expense)</button>
+            <button onClick={()=>setCm("withdrawal")} style={{background:"#7941C8",color:"#FFF",border:"none",borderRadius:11,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><ArrowUpCircle size={14}/> ถอนกำไร (Withdrawal)</button>
+          </div>
+
       </div>
 
       {cm==="init"       &&<Overlay onClose={()=>setCm(null)}><CashInitModal onClose={()=>setCm(null)} onSave={(cap,prof)=>{onAddCashTx({type:"initial",capital:cap,profit:prof,date:dispDate});setCm(null);}}/></Overlay>}
