@@ -437,7 +437,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.1.3</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.1.4</span>
       </div>
 
       {/* VIEWS */}
@@ -602,8 +602,8 @@ function PosView({sortedCats,catProducts,activeCat,setActive,cart,cartTotal,cart
                   style={{background:p.color,borderRadius:18,minHeight:140,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,gap:8,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.1)",transition:"all .18s",userSelect:"none"}}>
                   {p.image?<img src={p.image} alt={p.name} style={{width:68,height:68,borderRadius:12,objectFit:"cover"}}/>
                     :<span style={{fontSize:17,fontWeight:700,color:p.textColor||"#FFF",textAlign:"center",lineHeight:1.4}}>{p.name}</span>}
-                  <span style={{fontSize:15,color:p.textColor?`${p.textColor}CC`:"rgba(255,255,255,.85)",fontWeight:600}}>{p.variants.length===1?`฿${p.variants[0].price}`:`฿${Math.min(...p.variants.map(v=>v.price))}+`}</span>
-                  {hasOpts&&<span style={{fontSize:11,color:p.textColor?`${p.textColor}99`:"rgba(255,255,255,.65)"}}>+ ตัวเลือก</span>}
+                  <span style={{fontSize:15,color:(tc=>(tc.length===4?'#'+tc[1]+tc[1]+tc[2]+tc[2]+tc[3]+tc[3]:tc)+'CC')(p.textColor||"#FFF"),fontWeight:600}}>{p.variants.length===1?`฿${p.variants[0].price}`:`฿${Math.min(...p.variants.map(v=>v.price))}+`}</span>
+                  {hasOpts&&<span style={{fontSize:11,color:(tc=>(tc.length===4?'#'+tc[1]+tc[1]+tc[2]+tc[2]+tc[3]+tc[3]:tc)+'99')(p.textColor||"#FFF")}}>+ ตัวเลือก</span>}
                 </div>
               );
             })}
@@ -674,7 +674,7 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
         {product.variants.map(v=>(
           <button key={v.id} onClick={()=>setSelV(v)}
-            style={{background:selV?.id===v.id?product.color:"#F5F0EA",color:selV?.id===v.id?"#FFF":"#2C1810",border:`2px solid ${selV?.id===v.id?product.color:"#D4C4B0"}`,borderRadius:11,padding:"11px 16px",fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",justifyContent:"space-between",fontFamily:"inherit",transition:"all .15s"}}>
+            style={{background:selV?.id===v.id?product.color:"#F5F0EA",color:selV?.id===v.id?(product.textColor||"#FFF"):"#2C1810",border:`2px solid ${selV?.id===v.id?product.color:"#D4C4B0"}`,borderRadius:11,padding:"11px 16px",fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",justifyContent:"space-between",fontFamily:"inherit",transition:"all .15s"}}>
             <span>{v.name}</span><span>฿{v.price}</span>
           </button>
         ))}
@@ -746,7 +746,7 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
       )}
 
       <button onClick={()=>canConfirm&&onConfirm(selV,selAo,selFree,selDis)} disabled={!canConfirm}
-        style={{width:"100%",background:canConfirm?product.color:"#C0B0A0",color:"#FFF",border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,cursor:canConfirm?"pointer":"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        style={{width:"100%",background:canConfirm?product.color:"#C0B0A0",color:canConfirm?(product.textColor||"#FFF"):"#FFF",border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,cursor:canConfirm?"pointer":"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
         <CheckCircle size={18}/> {isEditing?"✅ ยืนยันการแก้ไข":"ยืนยันเพิ่มลงตะกร้า"}{canConfirm?` — ${baht(total)}`:""}
       </button>
     </div>
