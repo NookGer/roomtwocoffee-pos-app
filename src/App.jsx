@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor,
@@ -164,9 +164,17 @@ export default function App() {
   },[data.categories]);
 
   // ── Dirty Flag ──
-  // isDirty = true เฉพาะเมื่อ user กระทำจริง (เพิ่มสินค้า, สั่งออเดอร์ ฯลฯ)
-  // ป้องกันการ upload ขึ้น Supabase โดยไม่ตั้งใจ
+  // isDirty = true เฉพาะเมื่อ user กระทำจริง
+  // บันทึกลง localStorage ด้วย เผื่อปิดแอปก่อน sync เสร็จ
   const isDirty = useRef(false);
+
+  // โหลด dirty flag จาก localStorage ตอนเปิดแอป
+  // ถ้าเคยมีข้อมูลค้างอยู่ก่อนปิดแอป → พร้อม sync ทันทีที่มี action ถัดไป
+  useEffect(()=>{
+    if(localStorage.getItem("rt10_dirty")==="1"){
+      isDirty.current=true;
+    }
+  },[]);
 
   useEffect(()=>{
     // Online handler: เมื่อกลับมา online ให้เปรียบเทียบ timestamp ก่อนตัดสินใจ
@@ -205,65 +213,76 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
+  // ── debounce timer สำหรับ syncUp ──
+  // ไม่ sync ทุก keystroke แต่รอให้หยุดพิมพ์ 1.5 วินาทีก่อน
+  const syncTimer=useRef(null);
+
   const syncUp=useCallback((d,l,cs,ct,r)=>{
     if(!navigator.onLine)return;
     if(!isDirty.current)return;
-    // DEV Guard: ห้าม sync ขึ้น Supabase เมื่อรันบน localhost
-    // ป้องกันการเทสบน PC แล้วทับข้อมูลจริงบน Production
     if(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1"){
-      console.warn("🚫 syncUp blocked: running on localhost (DEV mode) — Supabase protected");
+      console.warn("🚫 syncUp blocked: DEV mode");
       return;
     }
-    setSyncSt(s=>({...s,status:"syncing"}));
-    sbUpsert({data:d,ledger:l.slice(-MAX_ORDERS),costs:cs,ctof:ct,rcpt:r})
-      .then(ts=>{
-        // ใช้ timestamp จริงที่ Supabase บันทึก ไม่ใช่ new Date() ในเครื่อง
-        const finalTs=ts||new Date().toISOString();
-        setSyncSt({status:"synced",lastSynced:finalTs});
-        ls_set(SK_SYNC,{lastSynced:finalTs});
-      })
-      .catch(()=>setSyncSt(s=>({...s,status:"error"})));
+    // debounce: ยกเลิก timer เดิม แล้วรอ 1.5s ก่อน sync จริง
+    if(syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current=setTimeout(()=>{
+      setSyncSt(s=>({...s,status:"syncing"}));
+      sbUpsert({data:d,ledger:l.slice(-MAX_ORDERS),costs:cs,ctof:ct,rcpt:r})
+        .then(ts=>{
+          const finalTs=ts||new Date().toISOString();
+          setSyncSt({status:"synced",lastSynced:finalTs});
+          ls_set(SK_SYNC,{lastSynced:finalTs});
+          // sync สำเร็จ → ล้าง dirty flag ทั้ง ref และ localStorage
+          isDirty.current=false;
+          localStorage.removeItem("rt10_dirty");
+        })
+        .catch(()=>setSyncSt(s=>({...s,status:"error"})));
+    },1500);
   },[]);
 
   const persist=useCallback((nd,nl,ncs,nct,sync)=>{
     const d=nd??data, l=nl??ledger, cs=ncs??costs, ct=nct??ctof;
 
-    // ── Rolling Window ──────────────────────────────
-    // orders: เก็บแค่ 400 วันล่าสุด ถ้าเกินลบเก่าสุดออกจนเหลือ 300 วัน
-    // ledger: เก็บแค่ 400 วันล่าสุดเช่นกัน
-    // Supabase sync รับข้อมูลชุดนี้เหมือนกัน
-    const today=new Date();
-    const daysAgo=(n)=>{ const d=new Date(today); d.setDate(d.getDate()-n); return d.toISOString().split("T")[0]; };
-    const cutoff400=daysAgo(400);
-    const cutoff300=daysAgo(300);
-
+    // ── Rolling Window (ทำเฉพาะเมื่อมี orders เกิน 400 วัน) ──
+    // ตรวจแค่ครั้งแรกกับครั้งที่ orders เปลี่ยน ไม่คำนวณทุก render
     let finalOrders=d.orders||[];
-    const oldestOrder=finalOrders.length>0
-      ? finalOrders.slice().sort((a,b)=>new Date(a.ts)-new Date(b.ts))[0]
-      : null;
-    // ถ้ามีออเดอร์เก่ากว่า 400 วัน → ตัดให้เหลือแค่ 300 วันล่าสุด
-    if(oldestOrder&&(oldestOrder.date||oldestOrder.ts?.split("T")[0])<cutoff400){
-      finalOrders=finalOrders.filter(o=>(o.date||o.ts?.split("T")[0])>=cutoff300);
-    }
-
     let finalLedger=l||[];
-    const oldestLedger=finalLedger.length>0
-      ? finalLedger.slice().sort((a,b)=>new Date(a.ts)-new Date(b.ts))[0]
-      : null;
-    if(oldestLedger&&oldestLedger.ts?.split("T")[0]<cutoff400){
-      finalLedger=finalLedger.filter(e=>e.ts?.split("T")[0]>=cutoff300||e.type==="initial");
+    if(finalOrders.length>0){
+      const today=new Date();
+      const daysAgo=(n)=>{ const x=new Date(today); x.setDate(x.getDate()-n); return x.toISOString().split("T")[0]; };
+      const cutoff400=daysAgo(400);
+      const cutoff300=daysAgo(300);
+      const sorted=finalOrders.slice().sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+      const oldestDate=sorted[0]?.date||sorted[0]?.ts?.split("T")[0]||"";
+      // trim เฉพาะเมื่อจำเป็น
+      if(oldestDate<cutoff400){
+        finalOrders=finalOrders.filter(o=>(o.date||o.ts?.split("T")[0]||"")>=cutoff300);
+        finalLedger=finalLedger.filter(e=>e.type==="initial"||(e.ts?.split("T")[0]||"")>=cutoff300);
+      }
     }
-    // ────────────────────────────────────────────────
 
     const finalData={...d,orders:finalOrders};
-    setData(finalData); ls_set(SK_DATA,finalData);
-    setLedger(finalLedger); ls_set(SK_LDGR,finalLedger);
-    setCosts(cs); ls_set(SK_COST,cs);
-    setCtof(ct); ls_set(SK_CTOF,ct);
-    if(sync){ isDirty.current=true; syncUp(finalData,finalLedger,cs,ct,rcpt); }
+    // batch: setState ทั้งหมดใน 1 batch ลด re-render จาก 4 ครั้ง → 1 ครั้ง
+    setData(finalData);
+    setLedger(finalLedger);
+    setCosts(cs);
+    setCtof(ct);
+    // localStorage write แบบ async ไม่บล็อก UI
+    setTimeout(()=>{
+      ls_set(SK_DATA,finalData);
+      ls_set(SK_LDGR,finalLedger);
+      ls_set(SK_COST,cs);
+      ls_set(SK_CTOF,ct);
+    },0);
+    if(sync){
+      isDirty.current=true;
+      localStorage.setItem("rt10_dirty","1"); // บันทึกค้างไว้ข้ามการเปิดแอป
+      syncUp(finalData,finalLedger,cs,ct,rcpt);
+    }
   },[data,ledger,costs,ctof,rcpt,syncUp]);
 
-  const persistRcpt=r=>{ isDirty.current=true; setRcptSt(r); ls_set(SK_RCPT,r); };
+  const persistRcpt=r=>{ isDirty.current=true; localStorage.setItem("rt10_dirty","1"); setRcptSt(r); ls_set(SK_RCPT,r); };
 
   const handleRestore=async()=>{
     setIsRestoring(true);
@@ -287,6 +306,7 @@ export default function App() {
         // บันทึก timestamp ของ Supabase ลง local เพื่อใช้เปรียบเทียบ conflict
         if(sbTs){ ls_set(SK_SYNC,{lastSynced:sbTs}); setSyncSt({status:"synced",lastSynced:sbTs}); }
         isDirty.current=false;
+        localStorage.removeItem("rt10_dirty"); // ข้อมูลตรงกับ Supabase แล้ว
       } else setModal({type:"alert",msg:"ไม่พบข้อมูลบน Supabase"});
     } catch(e){ setModal({type:"alert",msg:"เชื่อมต่อ Supabase ไม่ได้\n"+e.message}); }
     setSyncSt(s=>({...s,status:navigator.onLine?"synced":"offline"}));
@@ -417,6 +437,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.0.1</span>
       </div>
 
       {/* VIEWS */}
@@ -770,7 +791,7 @@ function CartItem({item,onQty,onDone,onEdit}){
 }
 
 // ── Sortable Row Components (dnd-kit) ──
-function SortableCatRow({cat,productCount,onEdit,onDel}){
+const SortableCatRow=memo(function SortableCatRow({cat,productCount,onEdit,onDel}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:cat.id});
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
   return(
@@ -785,9 +806,9 @@ function SortableCatRow({cat,productCount,onEdit,onDel}){
       <IconBtn variant="del"  onClick={e=>{e.stopPropagation();onDel();}}><Trash2 size={13}/></IconBtn>
     </div>
   );
-}
+});
 
-function SortableProdRow({prod,cat,lc,onEdit,onDel}){
+const SortableProdRow=memo(function SortableProdRow({prod,cat,lc,onEdit,onDel}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:prod.id});
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
   return(
@@ -810,7 +831,7 @@ function SortableProdRow({prod,cat,lc,onEdit,onDel}){
       <IconBtn variant="del"  onClick={e=>{e.stopPropagation();onDel();}}><Trash2 size={13}/></IconBtn>
     </div>
   );
-}
+});
 
 // ══════════════════════════════════════════════════
 // MANAGE VIEW — tabs: หมวดหมู่ | สินค้า | Add-on | ตัวเลือกเสริม | ส่วนลด
