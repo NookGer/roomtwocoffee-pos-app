@@ -437,7 +437,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.0.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.0.3</span>
       </div>
 
       {/* VIEWS */}
@@ -756,22 +756,22 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
 // ══════════════════════════════════════════════════
 // SHARED MICRO COMPONENTS — ต้องอยู่ก่อน ManageView และ components อื่นที่ใช้
 // ══════════════════════════════════════════════════
-function AlertModal({msg,onClose}){ return<div style={{textAlign:"center",padding:"8px 0"}}><AlertTriangle size={38} color="#C87941" style={{margin:"0 auto 12px"}}/><div style={{fontSize:15,color:"#5C4A36",marginBottom:20,lineHeight:1.6,whiteSpace:"pre-line"}}>{msg}</div><button onClick={onClose} style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px 28px",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ตกลง</button></div>; }
-function ConfirmModal({icon,msg,confirmLabel,confirmColor,onConfirm,onCancel}){ return<div style={{textAlign:"center",padding:"8px 0"}}>{icon}<div style={{fontSize:15,color:"#5C4A36",marginBottom:22,lineHeight:1.7,whiteSpace:"pre-line"}}>{msg}</div><div style={{display:"flex",gap:10}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onConfirm} style={{flex:1,background:confirmColor||"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{confirmLabel||"ยืนยัน"}</button></div></div>; }
+const AlertModal=memo(function AlertModal({msg,onClose}){ return<div style={{textAlign:"center",padding:"8px 0"}}><AlertTriangle size={38} color="#C87941" style={{margin:"0 auto 12px"}}/><div style={{fontSize:15,color:"#5C4A36",marginBottom:20,lineHeight:1.6,whiteSpace:"pre-line"}}>{msg}</div><button onClick={onClose} style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px 28px",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ตกลง</button></div>; });
+const ConfirmModal=memo(function ConfirmModal({icon,msg,confirmLabel,confirmColor,onConfirm,onCancel}){ return<div style={{textAlign:"center",padding:"8px 0"}}>{icon}<div style={{fontSize:15,color:"#5C4A36",marginBottom:22,lineHeight:1.7,whiteSpace:"pre-line"}}>{msg}</div><div style={{display:"flex",gap:10}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onConfirm} style={{flex:1,background:confirmColor||"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{confirmLabel||"ยืนยัน"}</button></div></div>; })
 function Overlay({children,onClose,wide}){ return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div onClick={e=>e.stopPropagation()} style={{background:"#FFFCF8",borderRadius:20,padding:26,width:wide?660:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8"}}>{children}</div></div>; }
-function AddBtn({children,onClick,color="#2C1810"}){ return<button onClick={onClick} style={{background:color,color:"#FFF",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>{children}</button>; }
-function SectionLabel({children}){ return<div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:7}}>{children}</div>; }
+const AddBtn=memo(function AddBtn({children,onClick,color="#2C1810"}){ return<button onClick={onClick} style={{background:color,color:"#FFF",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>{children}</button>; })
+const SectionLabel=memo(function SectionLabel({children}){ return<div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:7}}>{children}</div>; })
 function IconBtn({variant,onClick,children}){
   const s=variant==="del"?{background:"#FDE8E8",color:"#C84B4B"}:{background:"#F0E8DC",color:"#6B4F3A"};
   return<button onClick={onClick} style={{...s,border:"none",borderRadius:8,padding:"7px 9px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{children}</button>;
 }
-function ChipBtn({active,onClick,color,children}){ return<button onClick={onClick} style={{background:active?color:"#F0E8DC",color:active?"#FFF":"#5C4A36",border:"none",borderRadius:20,padding:"4px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>{children}</button>; }
-function ColorPicker({value,onChange}){ return<div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:2}}>{PALETTE.map(c=><div key={c} onClick={()=>onChange(c)} style={{width:28,height:28,borderRadius:7,background:c,cursor:"pointer",border:value===c?"3px solid #2C1810":"2px solid transparent",boxShadow:value===c?"0 0 0 2px #FFF,0 0 0 4px #2C1810":"none",transition:"all .15s"}}/>)}</div>; }
-function ModalTitle({children}){ return<div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:18}}>{children}</div>; }
-function Field({label,children}){ return<div style={{marginBottom:14}}><div style={{fontSize:12,color:"#8C7C6C",marginBottom:5,fontWeight:500}}>{label}</div>{children}</div>; }
-function ModalFooter({onCancel,onSave}){ return<div style={{display:"flex",gap:10,marginTop:4}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onSave} style={{flex:2,background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>บันทึก</button></div>; }
-function EmptyMsg({label}){ return<div style={{textAlign:"center",color:"#9C8C7C",padding:"40px 0",fontSize:14}}><Coffee size={32} style={{margin:"0 auto 10px",opacity:.35}}/><br/>{label}</div>; }
-function CartItem({item,onQty,onDone,onEdit}){
+const ChipBtn=memo(function ChipBtn({active,onClick,color,children}){ return<button onClick={onClick} style={{background:active?color:"#F0E8DC",color:active?"#FFF":"#5C4A36",border:"none",borderRadius:20,padding:"4px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>{children}</button>; })
+const ColorPicker=memo(function ColorPicker({value,onChange}){ return<div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:2}}>{PALETTE.map(c=><div key={c} onClick={()=>onChange(c)} style={{width:28,height:28,borderRadius:7,background:c,cursor:"pointer",border:value===c?"3px solid #2C1810":"2px solid transparent",boxShadow:value===c?"0 0 0 2px #FFF,0 0 0 4px #2C1810":"none",transition:"all .15s"}}/>)}</div>; });
+const ModalTitle=memo(function ModalTitle({children}){ return<div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:18}}>{children}</div>; })
+const Field=memo(function Field({label,children}){ return<div style={{marginBottom:14}}><div style={{fontSize:12,color:"#8C7C6C",marginBottom:5,fontWeight:500}}>{label}</div>{children}</div>; })
+const ModalFooter=memo(function ModalFooter({onCancel,onSave}){ return<div style={{display:"flex",gap:10,marginTop:4}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onSave} style={{flex:2,background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>บันทึก</button></div>; })
+const EmptyMsg=memo(function EmptyMsg({label}){ return<div style={{textAlign:"center",color:"#9C8C7C",padding:"40px 0",fontSize:14}}><Coffee size={32} style={{margin:"0 auto 10px",opacity:.35}}/><br/>{label}</div>; })
+const CartItem=memo(function CartItem({item,onQty,onDone,onEdit}){
   return(
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 4px",borderBottom:"1px solid #EDE4DA",opacity:item.done?0.5:1}}>
       <input type="checkbox" checked={item.done} onChange={()=>onDone(item.key)} style={{accentColor:"#6B4F3A",width:20,height:20,cursor:"pointer",flexShrink:0}}/>
@@ -788,7 +788,7 @@ function CartItem({item,onQty,onDone,onEdit}){
       <span style={{fontSize:14,fontWeight:700,color:"#6B4F3A",minWidth:54,textAlign:"right"}}>{baht(item.price*item.qty)}</span>
     </div>
   );
-}
+});
 
 // ── Sortable Row Components (dnd-kit) ──
 const SortableCatRow=memo(function SortableCatRow({cat,productCount,onEdit,onDel}){
@@ -1070,7 +1070,7 @@ function DiscountModal({discount,data,persist,onClose}){
 
 // ── Product Form (with linked options checkboxes) ──
 // CheckRow ต้องอยู่ระดับ top-level — ห้ามอยู่ใน component อื่น
-function CheckRow({label,ids,setIds,items}){
+const CheckRow=memo(function CheckRow({label,ids,setIds,items}){
   if(!items||items.length===0) return null;
   return(
     <Field label={label}>
@@ -1087,7 +1087,7 @@ function CheckRow({label,ids,setIds,items}){
       </div>
     </Field>
   );
-}
+});
 
 function ProdFormShell({initState,title,data,persist,onClose}){
   const [name,setName]=useState(initState.name||"");
@@ -1102,12 +1102,13 @@ function ProdFormShell({initState,title,data,persist,onClose}){
   const fr=useRef();
 
   const addons=data.addons||[], freeOpts=data.freeOpts||[], discounts=data.discounts||[];
-  const aV=()=>setVars(v=>[...v,{id:`v${uid()}`,name:"",price:""}]);
-  const rV=id=>setVars(v=>v.filter(x=>x.id!==id));
-  const uV=(id,f,val)=>setVars(v=>v.map(x=>x.id===id?{...x,[f]:val}:x));
-  const ip=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>setImage(ev.target.result);r.readAsDataURL(f);};
+  const aV=useCallback(()=>setVars(v=>[...v,{id:`v${uid()}`,name:"",price:""}]),[]);
+  const rV=useCallback(id=>setVars(v=>v.filter(x=>x.id!==id)),[]);
+  const uV=useCallback((id,f,val)=>setVars(v=>v.map(x=>x.id===id?{...x,[f]:val}:x)),[]);
+  const ip=useCallback(e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>setImage(ev.target.result);r.readAsDataURL(f);},[]);
 
-  const save=()=>{
+  // useCallback ป้องกัน save re-create ทุก render → ปุ่มบันทึกตอบสนองทันที
+  const save=useCallback(()=>{
     if(!name.trim()&&!catId)return;
     const vts=vars.filter(v=>v.name.trim()&&v.price!=="").map(v=>({...v,price:parseFloat(v.price)}));
     if(!vts.length)return;
@@ -1115,7 +1116,7 @@ function ProdFormShell({initState,title,data,persist,onClose}){
     if(initState.id) persist({...data,products:data.products.map(p=>p.id===initState.id?prod:p)},true);
     else persist({...data,products:[...data.products,prod]},true);
     onClose();
-  };
+  },[name,catId,vars,color,image,unit,linkedAddons,linkedFreeOpts,linkedDiscounts,initState,data,persist,onClose]);
 
   return(<div>
     <ModalTitle>{title}</ModalTitle>
