@@ -437,7 +437,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.1.4</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.1.5</span>
       </div>
 
       {/* VIEWS */}
@@ -758,7 +758,7 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
 // ══════════════════════════════════════════════════
 const AlertModal=memo(function AlertModal({msg,onClose}){ return<div style={{textAlign:"center",padding:"8px 0"}}><AlertTriangle size={38} color="#C87941" style={{margin:"0 auto 12px"}}/><div style={{fontSize:15,color:"#5C4A36",marginBottom:20,lineHeight:1.6,whiteSpace:"pre-line"}}>{msg}</div><button onClick={onClose} style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px 28px",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ตกลง</button></div>; });
 const ConfirmModal=memo(function ConfirmModal({icon,msg,confirmLabel,confirmColor,onConfirm,onCancel}){ return<div style={{textAlign:"center",padding:"8px 0"}}>{icon}<div style={{fontSize:15,color:"#5C4A36",marginBottom:22,lineHeight:1.7,whiteSpace:"pre-line"}}>{msg}</div><div style={{display:"flex",gap:10}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onConfirm} style={{flex:1,background:confirmColor||"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{confirmLabel||"ยืนยัน"}</button></div></div>; })
-function Overlay({children,onClose,wide}){ return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div onClick={e=>e.stopPropagation()} style={{background:"#FFFCF8",borderRadius:20,padding:26,width:wide?660:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8"}}>{children}</div></div>; }
+function Overlay({children,onClose,wide}){ return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div onClick={e=>e.stopPropagation()} style={{background:"#FFFCF8",borderRadius:20,padding:26,width:wide?440:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8"}}>{children}</div></div>; }
 const AddBtn=memo(function AddBtn({children,onClick,color="#2C1810"}){ return<button onClick={onClick} style={{background:color,color:"#FFF",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>{children}</button>; })
 const SectionLabel=memo(function SectionLabel({children}){ return<div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:7}}>{children}</div>; })
 function IconBtn({variant,onClick,children}){
@@ -1733,7 +1733,7 @@ function ChangeModal({modal,onDismiss}){
       </div>
 
       {showR&&order&&<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4C4B0",marginBottom:4}}>
-        <div ref={receiptRef} style={{background:"#fff",color:"#000",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%",maxWidth:"600px",margin:"0 auto",boxSizing:"border-box"}}>
+        <div ref={receiptRef} style={{background:"#fff",color:"#000",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%",maxWidth:"360px",margin:"0 auto",boxSizing:"border-box"}}>
 
           {/* หัวบิล: โลโก้ + ชื่อร้าน */}
           {logo?<><img src={logo} alt="logo" style={{width:70,height:70,objectFit:"contain",margin:"0 auto 6px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{shop}</div></>:<div style={{fontWeight:700,fontSize:19,letterSpacing:"0.04em"}}>{shop}</div>}
