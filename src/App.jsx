@@ -437,7 +437,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.1.5</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.1.6</span>
       </div>
 
       {/* VIEWS */}
@@ -665,32 +665,32 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
 
   return (
     <div>
-      {isEditing&&<div style={{background:"#EDE6DC",borderRadius:9,padding:"6px 12px",marginBottom:12,fontSize:12,color:"#6B4F3A",display:"flex",alignItems:"center",gap:5}}>✎ โหมดแก้ไขรายการ</div>}
-      <div style={{fontWeight:700,fontSize:17,color:"#2C1810",marginBottom:4,textAlign:"center"}}>{product.name}</div>
-      {product.unit&&<div style={{fontSize:12,color:"#8C7C6C",textAlign:"center",marginBottom:14}}>หน่วย: {product.unit}</div>}
+      {isEditing&&<div style={{background:"#EDE6DC",borderRadius:9,padding:"6px 12px",marginBottom:12,fontSize:14,color:"#6B4F3A",display:"flex",alignItems:"center",gap:5}}>✎ โหมดแก้ไขรายการ</div>}
+      <div style={{fontWeight:700,fontSize:22,color:"#2C1810",marginBottom:4,textAlign:"center"}}>{product.name}</div>
+      {product.unit&&<div style={{fontSize:15,color:"#8C7C6C",textAlign:"center",marginBottom:16}}>หน่วย: {product.unit}</div>}
 
       {/* Variants */}
       <SectionLabel>รูปแบบ <span style={{color:"#C84B4B"}}>*</span></SectionLabel>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
         {product.variants.map(v=>(
           <button key={v.id} onClick={()=>setSelV(v)}
-            style={{background:selV?.id===v.id?product.color:"#F5F0EA",color:selV?.id===v.id?(product.textColor||"#FFF"):"#2C1810",border:`2px solid ${selV?.id===v.id?product.color:"#D4C4B0"}`,borderRadius:11,padding:"11px 16px",fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",justifyContent:"space-between",fontFamily:"inherit",transition:"all .15s"}}>
+            style={{background:selV?.id===v.id?product.color:"#F5F0EA",color:selV?.id===v.id?(product.textColor||"#FFF"):"#2C1810",border:`2px solid ${selV?.id===v.id?product.color:"#D4C4B0"}`,borderRadius:13,padding:"16px 20px",fontSize:18,fontWeight:600,cursor:"pointer",display:"flex",justifyContent:"space-between",fontFamily:"inherit",transition:"all .15s"}}>
             <span>{v.name}</span><span>฿{v.price}</span>
           </button>
         ))}
       </div>
 
-      {/* Add-ons (บวกราคา) */}
+      {/* Add-ons */}
       {addons.length>0&&(
-        <div style={{marginBottom:16}}>
-          <SectionLabel><Tag size={11} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>Add-on (บวกราคา)</SectionLabel>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+        <div style={{marginBottom:18}}>
+          <SectionLabel><Tag size={13} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>Add-on (บวกราคา)</SectionLabel>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
             {addons.map(ao=>{
               const act=selAo.find(a=>a.id===ao.id);
               return (
                 <button key={ao.id} onClick={()=>toggleAo(ao)}
-                  style={{background:act?"#2C1810":"#F0E8DC",color:act?"#FFF":"#5C4A36",border:`1.5px solid ${act?"#2C1810":"#D4C4B0"}`,borderRadius:9,padding:"8px 4px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"center",lineHeight:1.5}}>
-                  {act?"✓ ":""}{ao.name}<br/><span style={{fontSize:10,color:act?"#6CC97A":"#7A9E6B"}}>+฿{ao.price}</span>
+                  style={{background:act?"#2C1810":"#F0E8DC",color:act?"#FFF":"#5C4A36",border:`1.5px solid ${act?"#2C1810":"#D4C4B0"}`,borderRadius:11,padding:"12px 6px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"center",lineHeight:1.6}}>
+                  {act?"✓ ":""}{ao.name}<br/><span style={{fontSize:12,color:act?"#6CC97A":"#7A9E6B"}}>+฿{ao.price}</span>
                 </button>
               );
             })}
@@ -698,16 +698,16 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
         </div>
       )}
 
-      {/* Free options (ไม่คิดเงิน) — per group */}
+      {/* Free options */}
       {freeOpts.map(grp=>(
-        <div key={grp.id} style={{marginBottom:14}}>
-          <SectionLabel><Gift size={11} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>{grp.groupName}</SectionLabel>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+        <div key={grp.id} style={{marginBottom:18}}>
+          <SectionLabel><Gift size={13} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>{grp.groupName}</SectionLabel>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
             {(grp.options||[]).map(opt=>{
               const act=selFree.find(x=>x.groupId===grp.id&&x.optId===opt.id);
               return (
                 <button key={opt.id} onClick={()=>toggleFree(grp,opt)}
-                  style={{background:act?"#4A7C6B":"#F0E8DC",color:act?"#FFF":"#5C4A36",border:`1.5px solid ${act?"#4A7C6B":"#D4C4B0"}`,borderRadius:9,padding:"8px 4px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>
+                  style={{background:act?"#4A7C6B":"#F0E8DC",color:act?"#FFF":"#5C4A36",border:`1.5px solid ${act?"#4A7C6B":"#D4C4B0"}`,borderRadius:11,padding:"12px 6px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>
                   {act?"✓ ":""}{opt.label}
                 </button>
               );
@@ -716,17 +716,17 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
         </div>
       ))}
 
-      {/* Discounts (ลบราคา) */}
+      {/* Discounts */}
       {discounts.length>0&&(
-        <div style={{marginBottom:16}}>
-          <SectionLabel><Percent size={11} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>ส่วนลด (หักราคา)</SectionLabel>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+        <div style={{marginBottom:18}}>
+          <SectionLabel><Percent size={13} style={{display:"inline",marginRight:4,verticalAlign:"middle"}}/>ส่วนลด (หักราคา)</SectionLabel>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
             {discounts.map(d=>{
               const act=selDis.find(x=>x.id===d.id);
               return (
                 <button key={d.id} onClick={()=>toggleDis(d)}
-                  style={{background:act?"#C84B4B":"#FDE8E8",color:act?"#FFF":"#C84B4B",border:`1.5px solid ${act?"#C84B4B":"#FCA5A5"}`,borderRadius:9,padding:"8px 4px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"center",lineHeight:1.5}}>
-                  {act?"✓ ":""}{d.name}<br/><span style={{fontSize:10}}>-฿{d.amount}</span>
+                  style={{background:act?"#C84B4B":"#FDE8E8",color:act?"#FFF":"#C84B4B",border:`1.5px solid ${act?"#C84B4B":"#FCA5A5"}`,borderRadius:11,padding:"12px 6px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"center",lineHeight:1.6}}>
+                  {act?"✓ ":""}{d.name}<br/><span style={{fontSize:12}}>-฿{d.amount}</span>
                 </button>
               );
             })}
@@ -736,7 +736,7 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
 
       {/* Summary strip */}
       {selV&&(
-        <div style={{background:"#EDE6DC",borderRadius:10,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#5C4A36"}}>
+        <div style={{background:"#EDE6DC",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:15,color:"#5C4A36"}}>
           <span style={{fontWeight:600}}>{product.name} ({selV.name})</span>
           {selAo.length>0&&<span style={{color:"#2C1810"}}> + {selAo.map(a=>a.name).join(", ")}</span>}
           {selFree.length>0&&<span style={{color:"#4A7C6B"}}> · {selFree.map(f=>f.optLabel).join(", ")}</span>}
@@ -746,8 +746,8 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
       )}
 
       <button onClick={()=>canConfirm&&onConfirm(selV,selAo,selFree,selDis)} disabled={!canConfirm}
-        style={{width:"100%",background:canConfirm?product.color:"#C0B0A0",color:canConfirm?(product.textColor||"#FFF"):"#FFF",border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,cursor:canConfirm?"pointer":"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-        <CheckCircle size={18}/> {isEditing?"✅ ยืนยันการแก้ไข":"ยืนยันเพิ่มลงตะกร้า"}{canConfirm?` — ${baht(total)}`:""}
+        style={{width:"100%",background:canConfirm?product.color:"#C0B0A0",color:canConfirm?(product.textColor||"#FFF"):"#FFF",border:"none",borderRadius:14,padding:"18px",fontSize:20,fontWeight:700,cursor:canConfirm?"pointer":"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <CheckCircle size={22}/> {isEditing?"✅ ยืนยันการแก้ไข":"ยืนยันเพิ่มลงตะกร้า"}{canConfirm?` — ${baht(total)}`:""}
       </button>
     </div>
   );
@@ -758,7 +758,7 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
 // ══════════════════════════════════════════════════
 const AlertModal=memo(function AlertModal({msg,onClose}){ return<div style={{textAlign:"center",padding:"8px 0"}}><AlertTriangle size={38} color="#C87941" style={{margin:"0 auto 12px"}}/><div style={{fontSize:15,color:"#5C4A36",marginBottom:20,lineHeight:1.6,whiteSpace:"pre-line"}}>{msg}</div><button onClick={onClose} style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px 28px",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ตกลง</button></div>; });
 const ConfirmModal=memo(function ConfirmModal({icon,msg,confirmLabel,confirmColor,onConfirm,onCancel}){ return<div style={{textAlign:"center",padding:"8px 0"}}>{icon}<div style={{fontSize:15,color:"#5C4A36",marginBottom:22,lineHeight:1.7,whiteSpace:"pre-line"}}>{msg}</div><div style={{display:"flex",gap:10}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onConfirm} style={{flex:1,background:confirmColor||"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{confirmLabel||"ยืนยัน"}</button></div></div>; })
-function Overlay({children,onClose,wide}){ return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div onClick={e=>e.stopPropagation()} style={{background:"#FFFCF8",borderRadius:20,padding:26,width:wide?440:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8"}}>{children}</div></div>; }
+function Overlay({children,onClose,wide}){ return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div onClick={e=>e.stopPropagation()} style={{background:"#FFFCF8",borderRadius:20,padding:26,width:wide?660:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8"}}>{children}</div></div>; }
 const AddBtn=memo(function AddBtn({children,onClick,color="#2C1810"}){ return<button onClick={onClick} style={{background:color,color:"#FFF",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>{children}</button>; })
 const SectionLabel=memo(function SectionLabel({children}){ return<div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:7}}>{children}</div>; })
 function IconBtn({variant,onClick,children}){
