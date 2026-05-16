@@ -7,10 +7,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png"],
+      includeAssets: ["icon_app.png"],
       manifest: {
-        name: "RoomTwo Coffee POS",
-        short_name: "RT Coffee",
+        name: "RoomTwo Pos",
+        short_name: "RoomTwo Pos",
         description: "ระบบ POS สำหรับร้านกาแฟ RoomTwo Coffee",
         theme_color: "#2C1810",
         background_color: "#F5F0EA",
@@ -19,8 +19,8 @@ export default defineConfig({
         scope: "/",
         start_url: "/",
         icons: [
-          { src: "icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+          { src: "icon_app.png", sizes: "600x600", type: "image/png" },
+          { src: "icon_app.png", sizes: "any", type: "image/png", purpose: "any maskable" }
         ]
       },
       workbox: {
