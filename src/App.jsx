@@ -437,13 +437,13 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.2.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.2.2</span>
       </div>
 
       {/* VIEWS */}
       {view==="pos"     && <PosView sortedCats={sortedCats} catProducts={catProducts} activeCat={activeCat} setActive={setActive} cart={cart} cartTotal={cartTotal} cartQty={cartQty} cartDone={cartDone} checkout={checkout} setCart={setCart} setModal={setModal} nextNum={nextNum} data={data} openEditModal={openEditModal} getLinked={getLinked} addToCart={addToCart}/>}
       {view==="manage"  && <ManageView data={data} persist={(nd,s)=>persist(nd,null,null,null,s)}/>}
-      {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger}/>}
+      {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={(id,method)=>persist({...data,orders:data.orders.map(o=>o.id===id?{...o,paymentMethod:method,received:o.total,change:0}:o)},true)}/>}
       {view==="ledger"  && <LedgerView ledger={ledger} cash={cash} data={data} dispDate={dispDate} onUndoEntry={undoLedger} onAddCashTx={addCashTx}/>}
       {view==="rcptset" && <ReceiptSettingsView settings={rcpt} onSave={persistRcpt} onClearData={clearData}/>}
 
@@ -1206,7 +1206,7 @@ function EditCatModal({cat,data,persist,onClose}){
 // ══════════════════════════════════════════════════
 // REPORT VIEW
 // ══════════════════════════════════════════════════
-function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLedgerCommit,ctof,ledger}){
+function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLedgerCommit,ctof,ledger,onUpdatePayment}){
   const [from,setFrom]=useState(dispDate),[to,setTo]=useState(dispDate);
   const [selCats,setSel]=useState([]),[histOpen,setHist]=useState(false);
   const [confModal,setConf]=useState(null),[commitConfirm,setCmtConf]=useState(null);
@@ -1384,6 +1384,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
                   {!order.isCanceled&&<button onClick={()=>setConf({type:"viewReceipt",order,rcpt})} style={{background:"#EDE6DC",border:"none",borderRadius:8,padding:"5px 9px",fontSize:11,color:"#6B4F3A",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}><Eye size={11}/> บิล</button>}
+                  {!order.isCanceled&&<button onClick={()=>setConf({type:"changePayment",order})} style={{background:"#EFF6FF",border:"none",borderRadius:8,padding:"5px 9px",fontSize:11,color:"#1D4ED8",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}><RefreshCw size={11}/> วิธีชำระ</button>}
                   {!order.isCanceled&&<button onClick={()=>setConf({type:"void",id:order.id,orderNum:order.orderNum})} style={{background:"#FDE8E8",border:"none",borderRadius:8,padding:"5px 9px",fontSize:11,color:"#C84B4B",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}><Ban size={11}/> ยกเลิก</button>}
                 </div>
               </div>
@@ -1394,6 +1395,26 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
       </div>
 
       {confModal?.type==="void"&&<Overlay onClose={()=>setConf(null)}><ConfirmModal icon={<Ban size={36} color="#C84B4B" style={{margin:"0 auto 12px"}}/>} msg={`ยืนยันยกเลิกออเดอร์ ${confModal.orderNum?fmtNum(confModal.orderNum):""}?`} confirmLabel="ยืนยัน" confirmColor="#C84B4B" onConfirm={()=>{onVoid(confModal.id);setConf(null);}} onCancel={()=>setConf(null)}/></Overlay>}
+      {confModal?.type==="changePayment"&&<Overlay onClose={()=>setConf(null)}>
+        <div style={{textAlign:"center"}}>
+          <RefreshCw size={32} color="#1D4ED8" style={{margin:"0 auto 12px"}}/>
+          <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>เปลี่ยนวิธีชำระเงิน</div>
+          <div style={{fontSize:13,color:"#8C7C6C",marginBottom:20}}>
+            บิล {confModal.order.orderNum?fmtNum(confModal.order.orderNum):""} · {baht(confModal.order.total)}
+          </div>
+          <div style={{display:"flex",gap:12,marginBottom:20}}>
+            <button onClick={()=>{onUpdatePayment(confModal.order.id,"cash");setConf(null);}}
+              style={{flex:1,background:confModal.order.paymentMethod!=="qr"?"#2C1810":"#F0E8DC",color:confModal.order.paymentMethod!=="qr"?"#FFF":"#5C4A36",border:`2px solid ${confModal.order.paymentMethod!=="qr"?"#2C1810":"#D4C4B0"}`,borderRadius:12,padding:"16px 8px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              💵 เงินสด{confModal.order.paymentMethod!=="qr"&&<div style={{fontSize:11,fontWeight:400,marginTop:4,opacity:.7}}>วิธีปัจจุบัน</div>}
+            </button>
+            <button onClick={()=>{onUpdatePayment(confModal.order.id,"qr");setConf(null);}}
+              style={{flex:1,background:confModal.order.paymentMethod==="qr"?"#1D4ED8":"#F0E8DC",color:confModal.order.paymentMethod==="qr"?"#FFF":"#5C4A36",border:`2px solid ${confModal.order.paymentMethod==="qr"?"#1D4ED8":"#D4C4B0"}`,borderRadius:12,padding:"16px 8px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              📱 โอนจ่าย{confModal.order.paymentMethod==="qr"&&<div style={{fontSize:11,fontWeight:400,marginTop:4,opacity:.7}}>วิธีปัจจุบัน</div>}
+            </button>
+          </div>
+          <div style={{fontSize:12,color:"#8C7C6C"}}>กดเลือกวิธีชำระใหม่เพื่อยืนยันทันที</div>
+        </div>
+      </Overlay>}
       {confModal?.type==="viewReceipt"&&<Overlay onClose={()=>setConf(null)} wide><ChangeModal modal={{change:confModal.order.change,received:confModal.order.received,total:confModal.order.total,order:confModal.order,rcpt:confModal.rcpt}} onDismiss={()=>setConf(null)}/></Overlay>}
       {commitConfirm&&<Overlay onClose={()=>setCmtConf(null)}><div style={{textAlign:"center"}}>
         <BookOpen size={36} color="#2C1810" style={{margin:"0 auto 12px"}}/>
