@@ -78,7 +78,24 @@ const SK_LDGR="rt10_ldgr", SK_COST="rt10_cost", SK_CTOF="rt10_ctof", SK_SEQ="rt1
 //  product.linkedAddons    [addonId]
 //  product.linkedFreeOpts  [freeOptGroupId]
 //  product.linkedDiscounts [discountId]
-const DEF_RCPT = { shopName:"RoomTwo Coffee", staffName:"", thankMsg:"ขอบคุณที่ใช้บริการ 🙏", logo:null, address:"", contact:"", promptpay:"", accountName:"" };
+// สีประจำวัน (พาสเทลอ่อนมาก) อาทิตย์=แดง จันทร์=เหลือง อังคาร=ชมพู พุธ=เขียว พฤหัส=ส้ม ศุกร์=ฟ้า เสาร์=ม่วง
+const DAY_COLORS=["#FFF0F0","#FFFDE7","#FFF0F8","#F1F8F1","#FFF4EC","#F0F7FF","#F5F0FF"];
+const DAY_NAMES=["อาทิตย์","จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์"];
+
+const DIVIDER_STYLES={
+  dashed:  {label:"ประ",    render:()=>"- - - - - - - - - - - - - - -"},
+  solid:   {label:"ทึบ",    render:()=>"─────────────────────────────"},
+  flower:  {label:"ดอกไม้", render:()=>"✿ ✿ ✿ ✿ ✿ ✿ ✿ ✿ ✿ ✿"},
+  heart:   {label:"หัวใจ",  render:()=>"♡ ♡ ♡ ♡ ♡ ♡ ♡ ♡ ♡ ♡"},
+};
+
+
+
+const DEF_RCPT = { shopName:"RoomTwo Coffee", staffName:"", thankMsg:"ขอบคุณที่ใช้บริการ 🙏", logo:null, address:"", contact:"", promptpay:"", accountName:"",
+  billColor:"#FFFFFF", autoDayColor:true,
+  dividerTop:"dashed", dividerMid:"dashed", dividerBot:"dashed",
+  footerText:"★ RoomTwo Coffee ★",
+};
 const DEF_DATA = {
   categories:[ {id:"cat_gen",name:"ทั่วไป",color:"#6B4F3A",order:0} ],
   products:[], addons:[], freeOpts:[], discounts:[], orders:[],
@@ -437,7 +454,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.2.3</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.0</span>
       </div>
 
       {/* VIEWS */}
@@ -1591,7 +1608,8 @@ function WithdrawalModal({onSave,onClose}){
 // RECEIPT SETTINGS
 // ══════════════════════════════════════════════════
 function ReceiptSettingsView({settings,onSave,onClearData}){
-  const [form,setForm]=useState({...settings}); const [saved,setSaved]=useState(false);
+  const [form,setForm]=useState({...DEF_RCPT,...settings});
+  const [saved,setSaved]=useState(false);
   const [showClear,setShowClear]=useState(false);
   const [pin,setPin]=useState(""); const [pinErr,setPinErr]=useState(false);
   const logoRef=useRef();
@@ -1603,10 +1621,18 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
     } else { setPinErr(true); setTimeout(()=>setPinErr(false),2000); }
   }
 
-  // Demo QR payload for preview
-  const previewQR = form.promptpay
-    ? generatePromptPayQR(form.promptpay, 85)
-    : "";
+  // สีบิลที่จะใช้จริง
+  const todayDow=new Date().getDay();
+  const activeBillColor=form.autoDayColor ? DAY_COLORS[todayDow] : (form.billColor||"#FFFFFF");
+
+  // preview QR
+  const previewQR = form.promptpay ? generatePromptPayQR(form.promptpay, 85) : "";
+
+  // helper render divider
+  const Divider=({type})=>{
+    const s=DIVIDER_STYLES[type]||DIVIDER_STYLES.dashed;
+    return <div style={{textAlign:"center",fontSize:10,color:"#bbb",letterSpacing:2,margin:"8px 0",overflow:"hidden"}}>{s.render()}</div>;
+  };
 
   return(
     <div style={{flex:1,overflow:"hidden",height:"calc(100vh - 64px)",display:"flex"}}>
@@ -1615,8 +1641,8 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
       <div style={{width:420,height:"100%",overflowY:"auto",padding:"24px 20px",borderRight:"1px solid #E4D4C0",background:"#F5F0EA",flexShrink:0}}>
         <div style={{fontWeight:700,fontSize:18,color:"#2C1810",marginBottom:18,display:"flex",alignItems:"center",gap:8}}><Settings size={18}/> ตั้งค่าใบเสร็จ</div>
 
+        {/* ── ข้อมูลร้าน ── */}
         <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:13,marginBottom:16}}>
-          {/* Logo */}
           <Field label="โลโก้ร้าน">
             <div style={{display:"flex",gap:12,alignItems:"center"}}>
               {form.logo&&<img src={form.logo} alt="logo" style={{width:52,height:52,borderRadius:9,objectFit:"contain",background:"#F5F0EA",padding:3}}/>}
@@ -1632,9 +1658,55 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
           <Field label="ช่องทางติดต่อ (Line / โทร)"><input value={form.contact||""} onChange={e=>upd("contact",e.target.value)} placeholder="เช่น Line: @roomtwocoffee" style={iStyle}/></Field>
           <Field label="ชื่อพนักงาน"><input value={form.staffName||""} onChange={e=>upd("staffName",e.target.value)} placeholder="เช่น น้องมิ้ว" style={iStyle}/></Field>
           <Field label="ข้อความขอบคุณ"><input value={form.thankMsg} onChange={e=>upd("thankMsg",e.target.value)} style={iStyle}/></Field>
+          <Field label="ข้อความท้ายบิล"><input value={form.footerText||"★ RoomTwo Coffee ★"} onChange={e=>upd("footerText",e.target.value)} placeholder="เช่น ★ RoomTwo Coffee ★" style={iStyle}/></Field>
         </div>
 
-        {/* PromptPay */}
+        {/* ── สีธีมบิล ── */}
+        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+          <div style={{fontWeight:600,fontSize:14,color:"#2C1810"}}>🎨 สีพื้นหลังบิล</div>
+          <Field label="">
+            <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+              <input type="checkbox" checked={!!form.autoDayColor} onChange={e=>upd("autoDayColor",e.target.checked)} style={{accentColor:"#2C1810",width:16,height:16}}/>
+              <span style={{fontSize:13,color:"#5C4A36"}}>เปลี่ยนสีตามวันอัตโนมัติ</span>
+            </label>
+            {form.autoDayColor&&<div style={{display:"flex",gap:5,marginTop:10,flexWrap:"wrap"}}>
+              {DAY_COLORS.map((c,i)=>(
+                <div key={i} title={DAY_NAMES[i]} style={{width:32,height:32,borderRadius:8,background:c,border:i===todayDow?"3px solid #2C1810":"1.5px solid #D4C4B0",cursor:"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#666"}}>
+                  {i===todayDow?"วันนี้":""}
+                </div>
+              ))}
+            </div>}
+            {!form.autoDayColor&&<div style={{marginTop:10}}>
+              <div style={{fontSize:12,color:"#8C7C6C",marginBottom:8}}>เลือกสีเอง:</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {[...DAY_COLORS,"#FFFFFF","#FFF8F2","#F0FFF4","#EFF6FF"].map((c,i)=>(
+                  <div key={i} onClick={()=>upd("billColor",c)} style={{width:36,height:36,borderRadius:9,background:c,border:form.billColor===c?"3px solid #2C1810":"1.5px solid #D4C4B0",cursor:"pointer"}}/>
+                ))}
+                <input type="color" value={form.billColor||"#FFFFFF"} onChange={e=>upd("billColor",e.target.value)} style={{width:36,height:36,borderRadius:9,border:"1.5px solid #D4C4B0",cursor:"pointer",padding:2}}/>
+              </div>
+            </div>}
+          </Field>
+        </div>
+
+        {/* ── สไตล์เส้นแบ่ง ── */}
+        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+          <div style={{fontWeight:600,fontSize:14,color:"#2C1810"}}>✂️ เส้นแบ่งบิล</div>
+          {[["dividerTop","ส่วนหัว (ล้อมเลขบิล)"],["dividerMid","ส่วนกลาง (ล้อมรายการ)"],["dividerBot","ส่วนท้าย (ก่อนขอบคุณ)"]].map(([key,label])=>(
+            <Field key={key} label={label}>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {Object.entries(DIVIDER_STYLES).map(([k,v])=>(
+                  <button key={k} onClick={()=>upd(key,k)}
+                    style={{background:form[key]===k?"#2C1810":"#F0E8DC",color:form[key]===k?"#FFF":"#5C4A36",border:`1.5px solid ${form[key]===k?"#2C1810":"#D4C4B0"}`,borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          ))}
+        </div>
+
+
+        {/* ── PromptPay ── */}
         <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:13,marginBottom:16}}>
           <div style={{fontWeight:600,fontSize:14,color:"#2C1810",display:"flex",alignItems:"center",gap:6}}>💳 PromptPay</div>
           <Field label="หมายเลขพร้อมเพย์"><input value={form.promptpay||""} onChange={e=>upd("promptpay",e.target.value)} placeholder="เบอร์โทร หรือ เลขบัตรประชาชน" style={iStyle}/></Field>
@@ -1669,7 +1741,7 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
         <div style={{fontWeight:700,fontSize:15,color:"#6B4F3A",marginBottom:18,alignSelf:"flex-start"}}>ตัวอย่างบิล (Live Preview)</div>
 
         {/* Receipt paper */}
-        <div style={{background:"#fff",borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:360,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center"}}>
+        <div style={{background:activeBillColor,borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:360,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box"}}>
 
           {/* Header */}
           {form.logo?<><img src={form.logo} alt="logo" style={{width:64,height:64,objectFit:"contain",margin:"0 auto 8px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{form.shopName||"ชื่อร้าน"}</div></>
@@ -1679,7 +1751,7 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
           {form.contact&&<div style={{fontSize:11,color:"#555",marginTop:2}}>{form.contact}</div>}
           <div style={{fontSize:12,color:"#555",marginTop:4}}>ใบเสร็จรับเงิน / Receipt</div>
 
-          <div style={{borderTop:"1px dashed #ccc",margin:"10px 0"}}/>
+          <Divider type={form.dividerTop||"dashed"}/>
 
           <div style={{textAlign:"left",fontSize:12,color:"#333",lineHeight:1.9}}>
             <div>เลขที่บิล: <b>#001</b></div>
@@ -1687,25 +1759,24 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
             <div>เวลา: {fmtTime(new Date().toISOString())}</div>
           </div>
 
-          <div style={{borderTop:"1px dashed #ccc",margin:"10px 0"}}/>
+          <Divider type={form.dividerMid||"dashed"}/>
 
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,textAlign:"left",tableLayout:"fixed"}}>
             <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
-            <thead><tr style={{borderBottom:"1px solid #ddd"}}><th style={{padding:"3px 0",fontWeight:600}}>รายการ</th><th style={{textAlign:"center",fontWeight:600}}>จำนวน</th><th style={{textAlign:"right",fontWeight:600}}>ราคา</th></tr></thead>
+            <thead><tr><th style={{padding:"3px 0",fontWeight:600}}>รายการ</th><th style={{textAlign:"center",fontWeight:600}}>จำนวน</th><th style={{textAlign:"right",fontWeight:600}}>ราคา</th></tr></thead>
             <tbody>
               <tr><td style={{padding:"3px 0"}}>อเมริกาโน่ (เย็น)</td><td style={{textAlign:"center"}}>1 แก้ว</td><td style={{textAlign:"right",fontWeight:600}}>฿35</td></tr>
-              <tr><td style={{padding:"3px 0"}}>ลาเต้ (ร้อน) <div style={{fontSize:10,color:"#888"}}>— หวานน้อย</div></td><td style={{textAlign:"center"}}>1 แก้ว</td><td style={{textAlign:"right",fontWeight:600}}>฿50</td></tr>
+              <tr><td style={{padding:"3px 0"}}>ลาเต้ (ร้อน)<div style={{fontSize:10,color:"#888"}}>— หวานน้อย</div></td><td style={{textAlign:"center"}}>1 แก้ว</td><td style={{textAlign:"right",fontWeight:600}}>฿50</td></tr>
             </tbody>
           </table>
 
-          <div style={{borderTop:"1px solid #ccc",marginTop:8,paddingTop:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿85</span></div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:previewQR?"#1D4ED8":"#166534",fontWeight:600}}>{previewQR?"โอนจ่าย":"เงินสด"}</span></div>
-          </div>
+          <Divider type={form.dividerMid||"dashed"}/>
 
-          {/* QR preview */}
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿85</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:"#166534",fontWeight:600}}>เงินสด</span></div>
+
           {previewQR&&<>
-            <div style={{borderTop:"1px dashed #ccc",margin:"12px 0"}}/>
+            <Divider type={form.dividerMid||"dashed"}/>
             <div style={{textAlign:"center"}}>
               {form.accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:13,fontWeight:700,marginBottom:8}}>{form.accountName}</div></>}
               <QRCodeSVG value={previewQR} size={130} style={{display:"block",margin:"0 auto"}}/>
@@ -1714,12 +1785,15 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
             </div>
           </>}
 
-          <div style={{borderTop:"1px dashed #ccc",margin:"10px 0"}}/>
+          <Divider type={form.dividerBot||"dashed"}/>
           <div style={{fontSize:12,color:"#444"}}>{form.thankMsg||"ขอบคุณที่ใช้บริการ"}</div>
-          <div style={{fontSize:12,color:"#555",marginTop:3}}>★ {form.shopName||"ชื่อร้าน"} ★</div>
+          <div style={{fontSize:12,color:"#555",marginTop:3}}>{form.footerText||"★ RoomTwo Coffee ★"}</div>
         </div>
 
-        <div style={{fontSize:12,color:"#9C8C7C",marginTop:14,textAlign:"center"}}>ตัวอย่างใช้ยอดสมมติ ฿85<br/>QR จะ generate ตามยอดจริงเมื่อชำระเงิน</div>
+        <div style={{fontSize:12,color:"#9C8C7C",marginTop:14,textAlign:"center"}}>
+          {form.autoDayColor?`สีวันนี้ (${DAY_NAMES[todayDow]}) — เปลี่ยนทุกวันอัตโนมัติ`:"สีที่เลือกเอง"}
+          <br/>ตัวอย่างใช้ยอดสมมติ ฿85
+        </div>
       </div>
     </div>
   );
@@ -1767,6 +1841,16 @@ function ChangeModal({modal,onDismiss}){
   const contact=rcpt.contact||"";
   const promptpay=rcpt.promptpay||"";
   const accountName=rcpt.accountName||"";
+  const footerText=rcpt.footerText||`★ ${shop} ★`;
+  const todayDow=new Date().getDay();
+  const billColor=rcpt.autoDayColor ? DAY_COLORS[todayDow] : (rcpt.billColor||"#FFFFFF");
+  const divTop=rcpt.dividerTop||"dashed";
+  const divMid=rcpt.dividerMid||"dashed";
+  const divBot=rcpt.dividerBot||"dashed";
+  const Divider=({type})=>{
+    const s=DIVIDER_STYLES[type]||DIVIDER_STYLES.dashed;
+    return <div style={{textAlign:"center",fontSize:10,color:"#bbb",letterSpacing:2,margin:"8px 0",overflow:"hidden"}}>{s.render()}</div>;
+  };
   const isChange=modal.change!==undefined&&modal.received!==undefined;
 
   // generate PromptPay payload inline — render ด้วย QRCodeSVG (ไม่ต้อง request ภายนอก)
@@ -1792,56 +1876,32 @@ function ChangeModal({modal,onDismiss}){
       </div>
 
       {showR&&order&&<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4C4B0",marginBottom:4}}>
-        <div ref={receiptRef} style={{background:"#fff",color:"#000",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%",maxWidth:"360px",margin:"0 auto",boxSizing:"border-box"}}>
-
-          {/* หัวบิล: โลโก้ + ชื่อร้าน */}
+        <div ref={receiptRef} style={{background:billColor,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%",maxWidth:"360px",margin:"0 auto",boxSizing:"border-box"}}>
           {logo?<><img src={logo} alt="logo" style={{width:70,height:70,objectFit:"contain",margin:"0 auto 6px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{shop}</div></>:<div style={{fontWeight:700,fontSize:19,letterSpacing:"0.04em"}}>{shop}</div>}
           {staff&&<div style={{fontSize:12,color:"#444",marginTop:2}}>พนักงาน: {staff}</div>}
-          {/* ที่อยู่ร้าน — ใต้ชื่อร้าน */}
           {address&&<div style={{fontSize:11,color:"#555",marginTop:3,lineHeight:1.5}}>{address}</div>}
-          {/* ช่องทางติดต่อ — ใต้ที่อยู่ */}
           {contact&&<div style={{fontSize:11,color:"#555",marginTop:2}}>{contact}</div>}
           <div style={{fontSize:12,color:"#555",marginTop:4}}>ใบเสร็จรับเงิน / Receipt</div>
-
-          <div style={{borderTop:"1px dashed #aaa",margin:"10px 0"}}/>
-
+          <Divider type={divTop}/>
           <div style={{textAlign:"left",fontSize:12,color:"#333",lineHeight:1.9}}>
             <div>เลขที่บิล: <b>{order.orderNum?fmtNum(order.orderNum):`#${order.id?.slice(-4).toUpperCase()}`}</b></div>
             <div>วันที่: {fmtDate(order.date)}</div>
             <div>เวลา: {fmtTime(order.ts)}</div>
           </div>
-
-          <div style={{borderTop:"1px dashed #aaa",margin:"10px 0"}}/>
-
+          <Divider type={divMid}/>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,textAlign:"left",tableLayout:"fixed"}}>
             <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
-            <thead><tr style={{borderBottom:"1px solid #ccc"}}><th style={{padding:"3px 0",fontWeight:600}}>รายการ</th><th style={{textAlign:"center",fontWeight:600}}>จำนวน</th><th style={{textAlign:"right",fontWeight:600}}>ราคา</th></tr></thead>
+            <thead><tr><th style={{padding:"3px 0",fontWeight:600}}>รายการ</th><th style={{textAlign:"center",fontWeight:600}}>จำนวน</th><th style={{textAlign:"right",fontWeight:600}}>ราคา</th></tr></thead>
             <tbody>{order.items.map((item,i)=><tr key={i}><td style={{padding:"3px 0",lineHeight:1.5,wordBreak:"break-word",paddingRight:4}}>{item.name} <span style={{color:"#666",fontSize:10}}>({item.variant})</span>{item.note&&<div style={{fontSize:9,color:"#888"}}>— {item.note}</div>}</td><td style={{textAlign:"center",whiteSpace:"nowrap"}}>{item.qty} {item.unit||""}</td><td style={{textAlign:"right",whiteSpace:"nowrap",fontWeight:600}}>฿{(item.price*item.qty).toLocaleString()}</td></tr>)}</tbody>
           </table>
-
-          <div style={{borderTop:"1px solid #aaa",marginTop:8,paddingTop:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿{order.total?.toLocaleString()}</span></div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
-            {order.paymentMethod!=="qr"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div></>}
-          </div>
-
-          {/* PromptPay QR — แสดงเฉพาะบิลที่โอนจ่ายเท่านั้น */}
-          {qrPayload&&order.paymentMethod==="qr"&&<>
-            <div style={{borderTop:"1px dashed #aaa",margin:"12px 0"}}/>
-            <div style={{textAlign:"center"}}>
-              {accountName&&<>
-                <div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div>
-                <div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div>
-              </>}
-              <QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/>
-              <div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div>
-              <div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div>
-            </div>
-          </>}
-
-          <div style={{borderTop:"1px dashed #aaa",margin:"10px 0"}}/>
+          <Divider type={divMid}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿{order.total?.toLocaleString()}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
+          {order.paymentMethod!=="qr"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div></>}
+          {qrPayload&&order.paymentMethod==="qr"&&<><Divider type={divMid}/><div style={{textAlign:"center"}}>{accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div></>}<QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
+          <Divider type={divBot}/>
           <div style={{fontSize:12,color:"#444"}}>{thankMsg}</div>
-          <div style={{fontSize:12,color:"#555",marginTop:3}}>★ {shop} ★</div>
+          <div style={{fontSize:12,color:"#555",marginTop:3}}>{footerText}</div>
         </div>
         <div style={{background:"#EDE6DC",padding:"10px 14px"}}>
           <button onClick={saveJpg} disabled={saving} style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:saving?0.7:1}}>
@@ -1852,3 +1912,4 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
+
