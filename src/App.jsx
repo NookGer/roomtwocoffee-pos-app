@@ -437,7 +437,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.2.0</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.2.1</span>
       </div>
 
       {/* VIEWS */}
@@ -1214,12 +1214,12 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const sc=data.categories.slice().sort((a,b)=>a.order-b.order);
   const today=todayStr();
 
-  const todayOrders=data.orders.filter(o=>o.date===today&&!o.isCanceled);
+  // กรองตาม date range (from/to) ไม่ใช่แค่วันนี้
+  const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
-  // แยกยอดเงินสด / โอนจ่าย (orders เก่าที่ไม่มี paymentMethod → default เป็น cash)
-  const cashRev = todayOrders.filter(o=>o.paymentMethod!=="qr").reduce((s,o)=>s+(o.total||0),0);
-  const qrRev   = todayOrders.filter(o=>o.paymentMethod==="qr").reduce((s,o)=>s+(o.total||0),0);
-  const todayLdgr=ledger.filter(e=>e.type==="category"&&e.ts?.startsWith(today));
+  const cashRev=todayOrders.filter(o=>o.paymentMethod!=="qr").reduce((s,o)=>s+(o.total||0),0);
+  const qrRev  =todayOrders.filter(o=>o.paymentMethod==="qr").reduce((s,o)=>s+(o.total||0),0);
+  const todayLdgr=ledger.filter(e=>e.type==="category"&&e.ts?.split("T")[0]>=from&&e.ts?.split("T")[0]<=to);
   const locked=todayLdgr.reduce((a,e)=>({cost:a.cost+(e.cost||0),profit:a.profit+(e.netProfit||0)}),{cost:0,profit:0});
 
   const pendOrders=data.orders.filter(o=>o.date===today&&!o.isCanceled);
@@ -1274,7 +1274,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
       {/* Daily Dashboard */}
       <div style={{background:"#2C1810",borderRadius:14,padding:"16px 18px",marginBottom:20}}>
         <div style={{fontSize:12,color:"#C8A882",marginBottom:10,fontWeight:600,display:"flex",justifyContent:"space-between"}}>
-          <span>📊 ผลงานวันนี้ — {fmtDate(today)}</span><span style={{fontSize:10,color:"rgba(255,255,255,.4)"}}>ทุน/กำไร = เฉพาะที่บันทึกแล้ว</span>
+          <span>📊 {from===to&&from===today ? `ผลงานวันนี้ — ${fmtDate(today)}` : from===to ? `ผลงาน — ${fmtDate(from)}` : `ผลงานตั้งแต่ ${fmtDate(from)} — ${fmtDate(to)}`}</span><span style={{fontSize:10,color:"rgba(255,255,255,.4)"}}>ทุน/กำไร = เฉพาะที่บันทึกแล้ว</span>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:8}}>
           {[["ยอดขายรวม",baht(dashRev),"#D4A574"],["เงินทุน (บันทึกแล้ว)",baht(locked.cost),"#C87941"],["กำไร (บันทึกแล้ว)",baht(locked.profit),locked.profit>=0?"#6CC97A":"#C96C6C"]].map(([l,v,c])=>(
