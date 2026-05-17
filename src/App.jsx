@@ -437,7 +437,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.2.2</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.2.3</span>
       </div>
 
       {/* VIEWS */}
@@ -1463,9 +1463,18 @@ function LedgerView({ledger,cash,data,dispDate,onUndoEntry,onAddCashTx}){
   const [cm,setCm]=useState(null);
   const [cu,setCu]=useState(null);
 
+  // คำนวณ range ของเดือนจากวันที่เลือก
+  const year=ld.slice(0,4), month=ld.slice(5,7);
+  const monthKey=`${year}-${month}`;
+  const daysInMonth=new Date(parseInt(year),parseInt(month),0).getDate();
+  const monthName=new Date(ld+"T00:00:00").toLocaleDateString("th-TH",{month:"long",year:"numeric"});
+
   const cashTxAll=ledger.filter(e=>["initial","expense","withdrawal"].includes(e.type)).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  // ฝั่งซ้าย: กรองตามวันที่เลือก (เหมือนเดิม)
   const dayEntries=ledger.filter(e=>(e.ts?.startsWith(ld))||e.date===ld).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
-  const ds=dayEntries.reduce((a,e)=>{
+  // ฝั่งขวา: กรองทั้งเดือน
+  const monthEntries=ledger.filter(e=>e.ts?.slice(0,7)===monthKey);
+  const ds=monthEntries.reduce((a,e)=>{
     if(e.type==="category"){a.revenue+=(e.revenue||0);a.cost+=(e.cost||0);a.profit+=(e.netProfit||0);a.units+=(e.units||0);}
     if(e.type==="expense")a.expense+=(e.amount||0);
     if(e.type==="withdrawal")a.withdrawal+=(e.amount||0);
@@ -1517,7 +1526,7 @@ function LedgerView({ledger,cash,data,dispDate,onUndoEntry,onAddCashTx}){
 
           {/* 1. สรุปยอดรายวัน (ย้ายมาจากฝั่งซ้าย — อยู่บนสุด) */}
           <div style={{background:"#2C1810",borderRadius:13,padding:"14px 16px"}}>
-            <div style={{fontWeight:700,fontSize:13,color:"#D4A574",marginBottom:10}}>สรุปยอดรายวัน — {fmtDateS(ld)}</div>
+            <div style={{fontWeight:700,fontSize:13,color:"#D4A574",marginBottom:10}}>สรุปยอดรายเดือน — {monthName}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:(ds.expense>0||ds.withdrawal>0)?8:0}}>
               {[["ยอดขาย",baht(ds.revenue),"#D4A574"],["ทุน",baht(ds.cost),"#C87941"],["กำไร",baht(ds.profit),ds.profit>=0?"#6CC97A":"#C96C6C"]].map(([l,v,c])=>(
                 <div key={l} style={{background:"rgba(255,255,255,.07)",borderRadius:9,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)"}}>{l}</div><div style={{fontSize:16,fontWeight:700,color:c}}>{v}</div></div>
