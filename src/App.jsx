@@ -83,18 +83,22 @@ const DAY_COLORS=["#FFF0F0","#FFFDE7","#FFF0F8","#F1F8F1","#FFF4EC","#F0F7FF","#
 const DAY_NAMES=["อาทิตย์","จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์"];
 
 const DIVIDER_STYLES={
-  dashed:  {label:"ประ",    render:()=>"- - - - - - - - - - - - - - -"},
-  solid:   {label:"ทึบ",    render:()=>"─────────────────────────────"},
-  flower:  {label:"ดอกไม้", render:()=>"✿ ✿ ✿ ✿ ✿ ✿ ✿ ✿ ✿ ✿"},
-  heart:   {label:"หัวใจ",  render:()=>"♡ ♡ ♡ ♡ ♡ ♡ ♡ ♡ ♡ ♡"},
+  dashed:  {label:"ประ",    render:(n=40)=>("- ".repeat(n)).trimEnd()},
+  solid:   {label:"ทึบ",    render:(n=40)=>("─".repeat(n*2))},
+  flower:  {label:"ดอกไม้", render:(n=20)=>("✿ ".repeat(n)).trimEnd()},
+  heart:   {label:"หัวใจ",  render:(n=20)=>("♡ ".repeat(n)).trimEnd()},
 };
 
 
 
 const DEF_RCPT = { shopName:"RoomTwo Coffee", staffName:"", thankMsg:"ขอบคุณที่ใช้บริการ 🙏", logo:null, address:"", contact:"", promptpay:"", accountName:"",
   billColor:"#FFFFFF", autoDayColor:true,
-  dividerTop:"dashed", dividerMid:"dashed", dividerBot:"dashed",
-  dividerTopLen:100, dividerMidLen:100, dividerBotLen:100,
+  dividerTop1:"dashed", dividerTop2:"dashed",
+  dividerMid1:"dashed", dividerMid2:"dashed", dividerMid3:"dashed",
+  dividerBot1:"dashed",
+  dividerTop1Len:100, dividerTop2Len:100,
+  dividerMid1Len:100, dividerMid2Len:100, dividerMid3Len:100,
+  dividerBot1Len:100,
   footerText:"★ RoomTwo Coffee ★",
 };
 const DEF_DATA = {
@@ -455,7 +459,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.0</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.1</span>
       </div>
 
       {/* VIEWS */}
@@ -1632,8 +1636,9 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
   // helper render divider
   const Divider=({type,length=100})=>{
     const s=DIVIDER_STYLES[type]||DIVIDER_STYLES.dashed;
+    const n=Math.max(1,Math.ceil(length/2.5));
     return <div style={{textAlign:"center",margin:"8px 0",overflow:"hidden"}}>
-      <div style={{width:length+"%",margin:"0 auto",overflow:"hidden",fontSize:10,color:"#bbb",letterSpacing:2,whiteSpace:"nowrap"}}>{s.render()}</div>
+      <div style={{width:length+"%",margin:"0 auto",overflow:"hidden",fontSize:10,color:"#bbb",letterSpacing:1,whiteSpace:"nowrap"}}>{s.render(n)}</div>
     </div>;
   };
 
@@ -1692,35 +1697,37 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
         </div>
 
         {/* ── สไตล์เส้นแบ่ง ── */}
-        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:14,marginBottom:16}}>
+        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:16,marginBottom:16}}>
           <div style={{fontWeight:600,fontSize:14,color:"#2C1810"}}>✂️ เส้นแบ่งบิล</div>
           {[
-            ["dividerTop","dividerTopLen","ส่วนหัว (ล้อมเลขบิล)"],
-            ["dividerMid","dividerMidLen","ส่วนกลาง (ล้อมรายการ)"],
-            ["dividerBot","dividerBotLen","ส่วนท้าย (ก่อนขอบคุณ)"]
-          ].map(([key,lenKey,label])=>(
-            <div key={key} style={{borderBottom:"1px solid #F0E4D4",paddingBottom:12}}>
-              <div style={{fontSize:12,color:"#8C7C6C",marginBottom:8,fontWeight:500}}>{label}</div>
-              {/* สไตล์ */}
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-                {Object.entries(DIVIDER_STYLES).map(([k,v])=>(
-                  <button key={k} onClick={()=>upd(key,k)}
-                    style={{background:form[key]===k?"#2C1810":"#F0E8DC",color:form[key]===k?"#FFF":"#5C4A36",border:`1.5px solid ${form[key]===k?"#2C1810":"#D4C4B0"}`,borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-              {/* Slider ความยาว */}
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                <span style={{fontSize:11,color:"#8C7C6C",whiteSpace:"nowrap"}}>ความยาว</span>
-                <input type="range" min={20} max={100} step={5}
-                  value={form[lenKey]??100}
-                  onChange={e=>upd(lenKey,parseInt(e.target.value))}
-                  style={{flex:1,accentColor:"#2C1810"}}/>
-                <span style={{fontSize:12,fontWeight:600,color:"#2C1810",minWidth:36,textAlign:"right"}}>{form[lenKey]??100}%</span>
-              </div>
-              {/* Mini Preview */}
-              <Divider type={form[key]||"dashed"} length={form[lenKey]??100}/>
+            ["หัวบิล",   [["dividerTop1","dividerTop1Len","เส้นที่ 1 (หลังหัวร้าน)"],["dividerTop2","dividerTop2Len","เส้นที่ 2 (หลังวัน/เวลา)"]]],
+            ["กลางบิล",  [["dividerMid1","dividerMid1Len","เส้นที่ 3 (หลังหัวตาราง)"],["dividerMid2","dividerMid2Len","เส้นที่ 4 (หลังรายการสุดท้าย)"],["dividerMid3","dividerMid3Len","เส้นที่ 5 (หลังยอดรวม/QR)"]]],
+            ["ท้ายบิล",  [["dividerBot1","dividerBot1Len","เส้นที่ 6 (หลังขอบคุณ)"]]],
+          ].map(([groupLabel,items])=>(
+            <div key={groupLabel} style={{background:"#F5EFE8",borderRadius:10,padding:14}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#6B4F3A",marginBottom:12}}>📌 {groupLabel}</div>
+              {items.map(([key,lenKey,label])=>(
+                <div key={key} style={{marginBottom:12}}>
+                  <div style={{fontSize:11,color:"#8C7C6C",marginBottom:6}}>{label}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                    {Object.entries(DIVIDER_STYLES).map(([k,v])=>(
+                      <button key={k} onClick={()=>upd(key,k)}
+                        style={{background:form[key]===k?"#2C1810":"#F0E8DC",color:form[key]===k?"#FFF":"#5C4A36",border:`1.5px solid ${form[key]===k?"#2C1810":"#D4C4B0"}`,borderRadius:8,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:11,color:"#8C7C6C",whiteSpace:"nowrap"}}>ความยาว</span>
+                    <input type="range" min={20} max={100} step={5}
+                      value={form[lenKey]??100}
+                      onChange={e=>upd(lenKey,parseInt(e.target.value))}
+                      style={{flex:1,accentColor:"#2C1810"}}/>
+                    <span style={{fontSize:11,fontWeight:600,color:"#2C1810",minWidth:34,textAlign:"right"}}>{form[lenKey]??100}%</span>
+                  </div>
+                  <Divider type={form[key]||"dashed"} length={form[lenKey]??100}/>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -1771,7 +1778,7 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
           {form.contact&&<div style={{fontSize:11,color:"#555",marginTop:2}}>{form.contact}</div>}
           <div style={{fontSize:12,color:"#555",marginTop:4}}>ใบเสร็จรับเงิน / Receipt</div>
 
-          <Divider type={form.dividerTop||"dashed"} length={form.dividerTopLen??100}/>
+          <Divider type={form.dividerTop1||"dashed"} length={form.dividerTop1Len??100}/>
 
           <div style={{textAlign:"left",fontSize:12,color:"#333",lineHeight:1.9}}>
             <div>เลขที่บิล: <b>#001</b></div>
@@ -1779,7 +1786,7 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
             <div>เวลา: {fmtTime(new Date().toISOString())}</div>
           </div>
 
-          <Divider type={form.dividerMid||"dashed"} length={form.dividerMidLen??100}/>
+          <Divider type={form.dividerTop2||"dashed"} length={form.dividerTop2Len??100}/>
 
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,textAlign:"left",tableLayout:"fixed"}}>
             <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
@@ -1790,13 +1797,14 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
             </tbody>
           </table>
 
-          <Divider type={form.dividerMid||"dashed"} length={form.dividerMidLen??100}/>
+          <Divider type={form.dividerMid1||"dashed"} length={form.dividerMid1Len??100}/>
 
+          <Divider type={form.dividerMid2||"dashed"} length={form.dividerMid2Len??100}/>
           <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿85</span></div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:"#166534",fontWeight:600}}>เงินสด</span></div>
 
           {previewQR&&<>
-            <Divider type={form.dividerMid||"dashed"} length={form.dividerMidLen??100}/>
+          {previewQR&&<><Divider type={form.dividerMid3||"dashed"} length={form.dividerMid3Len??100}/><div style={{textAlign:"center"}}>{form.accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:13,fontWeight:700,marginBottom:8}}>{form.accountName}</div></>}<QRCodeSVG value={previewQR} size={130} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:16,fontWeight:700,marginTop:6}}>฿85</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
             <div style={{textAlign:"center"}}>
               {form.accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:13,fontWeight:700,marginBottom:8}}>{form.accountName}</div></>}
               <QRCodeSVG value={previewQR} size={130} style={{display:"block",margin:"0 auto"}}/>
@@ -1805,7 +1813,7 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
             </div>
           </>}
 
-          <Divider type={form.dividerBot||"dashed"} length={form.dividerBotLen??100}/>
+          <Divider type={form.dividerBot1||"dashed"} length={form.dividerBot1Len??100}/>
           <div style={{fontSize:12,color:"#444"}}>{form.thankMsg||"ขอบคุณที่ใช้บริการ"}</div>
           <div style={{fontSize:12,color:"#555",marginTop:3}}>{form.footerText||"★ RoomTwo Coffee ★"}</div>
         </div>
@@ -1864,16 +1872,17 @@ function ChangeModal({modal,onDismiss}){
   const footerText=rcpt.footerText||`★ ${shop} ★`;
   const todayDow=new Date().getDay();
   const billColor=rcpt.autoDayColor ? DAY_COLORS[todayDow] : (rcpt.billColor||"#FFFFFF");
-  const divTop=rcpt.dividerTop||"dashed";
-  const divMid=rcpt.dividerMid||"dashed";
-  const divBot=rcpt.dividerBot||"dashed";
-  const divTopLen=rcpt.dividerTopLen??100;
-  const divMidLen=rcpt.dividerMidLen??100;
-  const divBotLen=rcpt.dividerBotLen??100;
+  const divTop1=rcpt.dividerTop1||"dashed", divTop1Len=rcpt.dividerTop1Len??100;
+  const divTop2=rcpt.dividerTop2||"dashed", divTop2Len=rcpt.dividerTop2Len??100;
+  const divMid1=rcpt.dividerMid1||"dashed", divMid1Len=rcpt.dividerMid1Len??100;
+  const divMid2=rcpt.dividerMid2||"dashed", divMid2Len=rcpt.dividerMid2Len??100;
+  const divMid3=rcpt.dividerMid3||"dashed", divMid3Len=rcpt.dividerMid3Len??100;
+  const divBot1=rcpt.dividerBot1||"dashed", divBot1Len=rcpt.dividerBot1Len??100;
   const Divider=({type,length=100})=>{
     const s=DIVIDER_STYLES[type]||DIVIDER_STYLES.dashed;
+    const n=Math.max(1,Math.ceil(length/2.5));
     return <div style={{textAlign:"center",margin:"8px 0",overflow:"hidden"}}>
-      <div style={{width:length+"%",margin:"0 auto",overflow:"hidden",fontSize:10,color:"#bbb",letterSpacing:2,whiteSpace:"nowrap"}}>{s.render()}</div>
+      <div style={{width:length+"%",margin:"0 auto",overflow:"hidden",fontSize:10,color:"#bbb",letterSpacing:1,whiteSpace:"nowrap"}}>{s.render(n)}</div>
     </div>;
   };
   const isChange=modal.change!==undefined&&modal.received!==undefined;
@@ -1907,24 +1916,24 @@ function ChangeModal({modal,onDismiss}){
           {address&&<div style={{fontSize:11,color:"#555",marginTop:3,lineHeight:1.5}}>{address}</div>}
           {contact&&<div style={{fontSize:11,color:"#555",marginTop:2}}>{contact}</div>}
           <div style={{fontSize:12,color:"#555",marginTop:4}}>ใบเสร็จรับเงิน / Receipt</div>
-          <Divider type={divTop} length={divTopLen}/>
+          <Divider type={divTop1} length={divTop1Len}/>
           <div style={{textAlign:"left",fontSize:12,color:"#333",lineHeight:1.9}}>
             <div>เลขที่บิล: <b>{order.orderNum?fmtNum(order.orderNum):`#${order.id?.slice(-4).toUpperCase()}`}</b></div>
             <div>วันที่: {fmtDate(order.date)}</div>
             <div>เวลา: {fmtTime(order.ts)}</div>
           </div>
-          <Divider type={divMid} length={divMidLen}/>
+          <Divider type={divTop2} length={divTop2Len}/>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,textAlign:"left",tableLayout:"fixed"}}>
             <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
             <thead><tr><th style={{padding:"3px 0",fontWeight:600}}>รายการ</th><th style={{textAlign:"center",fontWeight:600}}>จำนวน</th><th style={{textAlign:"right",fontWeight:600}}>ราคา</th></tr></thead>
             <tbody>{order.items.map((item,i)=><tr key={i}><td style={{padding:"3px 0",lineHeight:1.5,wordBreak:"break-word",paddingRight:4}}>{item.name} <span style={{color:"#666",fontSize:10}}>({item.variant})</span>{item.note&&<div style={{fontSize:9,color:"#888"}}>— {item.note}</div>}</td><td style={{textAlign:"center",whiteSpace:"nowrap"}}>{item.qty} {item.unit||""}</td><td style={{textAlign:"right",whiteSpace:"nowrap",fontWeight:600}}>฿{(item.price*item.qty).toLocaleString()}</td></tr>)}</tbody>
           </table>
-          <Divider type={divMid} length={divMidLen}/>
+          <Divider type={divMid1} length={divMid1Len}/>
           <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿{order.total?.toLocaleString()}</span></div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
-          {order.paymentMethod!=="qr"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div></>}
-          {qrPayload&&order.paymentMethod==="qr"&&<><Divider type={divMid} length={divMidLen}/><div style={{textAlign:"center"}}>{accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div></>}<QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
-          <Divider type={divBot} length={divBotLen}/>
+          {order.paymentMethod!=="qr"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
+          {qrPayload&&order.paymentMethod==="qr"&&<><Divider type={divMid3} length={divMid3Len}/><div style={{textAlign:"center"}}>{accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div></>}<QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
+          <Divider type={divBot1} length={divBot1Len}/>
           <div style={{fontSize:12,color:"#444"}}>{thankMsg}</div>
           <div style={{fontSize:12,color:"#555",marginTop:3}}>{footerText}</div>
         </div>
@@ -1937,3 +1946,4 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
+
