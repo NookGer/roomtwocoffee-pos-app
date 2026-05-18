@@ -1765,8 +1765,11 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
         const canvas=document.createElement('canvas');
         canvas.width=360; canvas.height=360;
         const ctx=canvas.getContext('2d');
+        // ต้องล้าง canvas ให้โปร่งใสก่อน ไม่ fill สีพื้น
+        ctx.clearRect(0,0,360,360);
         ctx.drawImage(img,0,0,360,360);
-        cb(canvas.toDataURL('image/jpeg',0.7));
+        // ใช้ PNG เพื่อรักษา transparency ของไฟล์ต้นฉบับ
+        cb(canvas.toDataURL('image/png'));
       };
       img.src=ev.target.result;
     };
