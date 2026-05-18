@@ -111,6 +111,18 @@ const DEF_CASH = { capital:0, profit:0 };
 // ── Helpers ──
 function ls_get(k,d){ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):d; }catch(e){return d;} }
 function ls_set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+// ตัด orders เหลือแค่ 60 วันล่าสุดก่อนเขียน localStorage
+// memory และ Supabase ยังครบ 400 วันเหมือนเดิม
+function ls_set_data(data){
+  try{
+    const today=new Date();
+    const cutoff60=new Date(today);
+    cutoff60.setDate(cutoff60.getDate()-60);
+    const cut=cutoff60.toISOString().split("T")[0];
+    const trimmed={...data,orders:(data.orders||[]).filter(o=>(o.date||o.ts?.split("T")[0]||"")>=cut)};
+    localStorage.setItem(SK_DATA,JSON.stringify(trimmed));
+  }catch(e){}
+}
 // คำนวณเลขบิลจาก orders จริง ไม่ใช่ SK_SEQ แยก ป้องกันรีเซ็ตเมื่อ restore
 function getMaxOrderNum(orders, date){
   const todayOrders = orders.filter(o=>o.date===date&&!o.isCanceled);
@@ -302,8 +314,10 @@ export default function App() {
     setCosts(cs);
     setCtof(ct);
     // localStorage write แบบ async ไม่บล็อก UI
+    // SK_DATA ใช้ ls_set_data เพื่อตัด orders เหลือ 60 วัน ป้องกัน localStorage เต็ม
+    // memory (finalData) และ Supabase ยังครบ 400 วันเหมือนเดิม
     setTimeout(()=>{
-      ls_set(SK_DATA,finalData);
+      ls_set_data(finalData);
       ls_set(SK_LDGR,finalLedger);
       ls_set(SK_COST,cs);
       ls_set(SK_CTOF,ct);
@@ -315,6 +329,23 @@ export default function App() {
     }
   },[data,ledger,costs,ctof,rcpt,syncUp]);
 
+  const handleAdjustment=useCallback((adj,date)=>{
+    setData(prev=>{
+      // ลบ adjustment เดิมของวันนั้นออกก่อน
+      let orders=prev.orders.filter(o=>!(o.type==="adjustment"&&o.date===date));
+      // ถ้ามี adj ใหม่ให้เพิ่มเข้าไป
+      if(adj){
+        orders=[...orders,{id:uid(),type:"adjustment",date,cashAdj:adj.cashAdj,qrAdj:adj.qrAdj,ts:new Date().toISOString()}];
+      }
+      const updated={...prev,orders};
+      ls_set_data(updated);
+      isDirty.current=true;
+      localStorage.setItem("rt10_dirty","1");
+      syncUp(updated,ledger,costs,ctof,rcpt);
+      return updated;
+    });
+  },[ledger,costs,ctof,rcpt,syncUp]);
+
   const handleUpdatePayment=useCallback((id,method)=>{
     setData(prev=>{
       const updated={...prev,orders:prev.orders.map(o=>{
@@ -324,7 +355,7 @@ export default function App() {
         delete base.splitCash; delete base.splitQR;
         return base;
       })};
-      ls_set(SK_DATA,updated);
+      ls_set_data(updated); // เขียน localStorage แค่ 60 วัน
       isDirty.current=true;
       localStorage.setItem("rt10_dirty","1");
       syncUp(updated,ledger,costs,ctof,rcpt);
@@ -347,7 +378,7 @@ export default function App() {
         if(!d.freeOpts)d.freeOpts=[];
         if(!d.discounts)d.discounts=[];
         if(!d.categories||!d.categories.length)d.categories=DEF_DATA.categories;
-        setData(d); ls_set(SK_DATA,d);
+        setData(d); ls_set_data(d); // เขียน localStorage แค่ 60 วัน memory ครบ 400 วัน
         setLedger(snap.ledger||d.ledger||[]); ls_set(SK_LDGR,snap.ledger||d.ledger||[]);
         setCosts(snap.costs||d.costs||{}); ls_set(SK_COST,snap.costs||d.costs||{});
         setCtof(snap.ctof||d.ctof||{}); ls_set(SK_CTOF,snap.ctof||d.ctof||{});
@@ -508,13 +539,13 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.5</span>
       </div>
 
       {/* VIEWS */}
       {view==="pos"     && <PosView sortedCats={sortedCats} catProducts={catProducts} activeCat={activeCat} setActive={setActive} cart={cart} cartTotal={cartTotal} cartQty={cartQty} cartDone={cartDone} checkout={checkout} setCart={setCart} setModal={setModal} nextNum={nextNum} data={data} openEditModal={openEditModal} getLinked={getLinked} addToCart={addToCart}/>}
       {view==="manage"  && <ManageView data={data} persist={(nd,s)=>persist(nd,null,null,null,s)}/>}
-      {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={handleUpdatePayment}/>}
+      {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={handleUpdatePayment} onAdjustment={handleAdjustment}/>}
       {view==="ledger"  && <LedgerView ledger={ledger} cash={cash} data={data} dispDate={dispDate} onUndoEntry={undoLedger} onAddCashTx={addCashTx}/>}
       {view==="rcptset" && <ReceiptSettingsView settings={rcpt} onSave={persistRcpt} onClearData={clearData}/>}
 
@@ -821,6 +852,90 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
         <CheckCircle size={22}/> {isEditing?"✅ ยืนยันการแก้ไข":"ยืนยันเพิ่มลงตะกร้า"}{canConfirm?` — ${baht(total)}`:""}
       </button>
     </div>
+  );
+}
+
+
+// ══════════════════════════════════════════════════
+// ADJUSTMENT MODAL — ปรับยอดประจำวัน (รหัสผ่าน required)
+// ══════════════════════════════════════════════════
+function AdjustmentModal({existing,dispDate,cashRev,qrRev,onSave,onCancel}){
+  const [step,setStep]=useState("pin"); // pin | form
+  const [pin,setPin]=useState("");
+  const [pinErr,setPinErr]=useState(false);
+  const [cashReal,setCashReal]=useState(existing?String((cashRev+(existing.cashAdj||0))):String(cashRev));
+  const [qrReal,setQrReal]=useState(existing?String((qrRev+(existing.qrAdj||0))):String(qrRev));
+  const PASSWORD="ปรับยอดอีกแล้ว";
+
+  const cashAdj=parseInt(cashReal||"0",10)-Math.round(cashRev);
+  const qrAdj=parseInt(qrReal||"0",10)-Math.round(qrRev);
+
+  const checkPin=()=>{
+    if(pin===PASSWORD){ setStep("form"); setPinErr(false); }
+    else{ setPinErr(true); setPin(""); }
+  };
+
+  if(step==="pin") return(
+    <Overlay onClose={onCancel}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:28,marginBottom:8}}>🔧</div>
+        <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>ปรับยอดประจำวัน</div>
+        <div style={{fontSize:12,color:"#8C7C6C",marginBottom:20}}>กรุณาใส่รหัสเพื่อดำเนินการต่อ</div>
+        <input
+          type="text" value={pin} onChange={e=>setPin(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&checkPin()}
+          placeholder="รหัสผ่าน..."
+          style={{width:"100%",padding:"11px 14px",borderRadius:10,border:`2px solid ${pinErr?"#C84B4B":"#D4C4B0"}`,fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8,background:pinErr?"#FDE8E8":"#F5F0EA",color:"#2C1810",textAlign:"center"}}
+          autoFocus
+        />
+        {pinErr&&<div style={{fontSize:12,color:"#C84B4B",marginBottom:8}}>รหัสไม่ถูกต้อง ลองใหม่อีกครั้ง</div>}
+        <div style={{display:"flex",gap:10,marginTop:4}}>
+          <button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
+          <button onClick={checkPin} style={{flex:2,background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>ยืนยัน</button>
+        </div>
+      </div>
+    </Overlay>
+  );
+
+  return(
+    <Overlay onClose={onCancel}>
+      <div>
+        <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>🔧 ปรับยอดประจำวัน</div>
+        <div style={{fontSize:12,color:"#8C7C6C",marginBottom:16}}>{dispDate} — กรอกยอดจริงที่นับได้</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
+          <div style={{background:"#F0FFF4",border:"1px solid #A8D8A8",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontSize:12,color:"#166534",marginBottom:4,fontWeight:600}}>💵 ยอดเงินสดจริง (฿)</div>
+            <div style={{fontSize:11,color:"#8C7C6C",marginBottom:6}}>ระบบ: ฿{Math.round(cashRev).toLocaleString()}</div>
+            <input type="number" value={cashReal} onChange={e=>setCashReal(e.target.value)}
+              style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid #A8D8A8",fontSize:20,fontWeight:700,color:"#166534",background:"#FFF",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            {cashAdj!==0&&<div style={{fontSize:11,marginTop:5,color:cashAdj>0?"#166534":"#C84B4B",fontWeight:600}}>
+              {cashAdj>0?"▲ เพิ่ม":"▼ ลด"} ฿{Math.abs(cashAdj).toLocaleString()}
+            </div>}
+          </div>
+          <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontSize:12,color:"#1D4ED8",marginBottom:4,fontWeight:600}}>📱 ยอดโอนจ่ายจริง (฿)</div>
+            <div style={{fontSize:11,color:"#8C7C6C",marginBottom:6}}>ระบบ: ฿{Math.round(qrRev).toLocaleString()}</div>
+            <input type="number" value={qrReal} onChange={e=>setQrReal(e.target.value)}
+              style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid #BFDBFE",fontSize:20,fontWeight:700,color:"#1D4ED8",background:"#FFF",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            {qrAdj!==0&&<div style={{fontSize:11,marginTop:5,color:qrAdj>0?"#166534":"#C84B4B",fontWeight:600}}>
+              {qrAdj>0?"▲ เพิ่ม":"▼ ลด"} ฿{Math.abs(qrAdj).toLocaleString()}
+            </div>}
+          </div>
+        </div>
+        {cashAdj===0&&qrAdj===0&&<div style={{background:"#F5F0EA",borderRadius:10,padding:"9px 14px",marginBottom:14,fontSize:12,color:"#8C7C6C",textAlign:"center"}}>ยอดตรงกับระบบ ไม่ต้องปรับ</div>}
+        {(cashAdj!==0||qrAdj!==0)&&<div style={{background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:10,padding:"9px 14px",marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:600,color:"#92400E",marginBottom:4}}>สรุปการปรับยอด</div>
+          <div style={{fontSize:12,color:"#78350F"}}>💵 เงินสด {cashAdj>=0?"+":""}{cashAdj.toLocaleString()} &nbsp;|&nbsp; 📱 โอนจ่าย {qrAdj>=0?"+":""}{qrAdj.toLocaleString()}</div>
+        </div>}
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
+          <button onClick={()=>onSave(cashAdj,qrAdj)} disabled={cashAdj===0&&qrAdj===0}
+            style={{flex:2,background:(cashAdj!==0||qrAdj!==0)?"#2C1810":"#C0B0A0",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:(cashAdj!==0||qrAdj!==0)?"pointer":"not-allowed",fontFamily:"inherit"}}>
+            ✅ บันทึกการปรับยอด
+          </button>
+        </div>
+      </div>
+    </Overlay>
   );
 }
 
@@ -1305,7 +1420,7 @@ function EditCatModal({cat,data,persist,onClose}){
 // ══════════════════════════════════════════════════
 // REPORT VIEW
 // ══════════════════════════════════════════════════
-function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLedgerCommit,ctof,ledger,onUpdatePayment}){
+function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLedgerCommit,ctof,ledger,onUpdatePayment,onAdjustment}){
   const [from,setFrom]=useState(dispDate),[to,setTo]=useState(dispDate);
   const [selCats,setSel]=useState([]),[histOpen,setHist]=useState(false);
   const [confModal,setConf]=useState(null),[commitConfirm,setCmtConf]=useState(null);
@@ -1317,16 +1432,21 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
   // split order: นับ splitCash → cashRev, splitQR → qrRev
+  const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
+  const cashAdj=adjToday.reduce((s,o)=>s+(o.cashAdj||0),0);
+  const qrAdj=adjToday.reduce((s,o)=>s+(o.qrAdj||0),0);
   const cashRev=todayOrders.reduce((s,o)=>{
     if(o.paymentMethod==="split") return s+(o.splitCash||0);
     if(o.paymentMethod==="qr") return s;
     return s+(o.total||0);
-  },0);
+  },0)+cashAdj;
   const qrRev=todayOrders.reduce((s,o)=>{
     if(o.paymentMethod==="split") return s+(o.splitQR||0);
     if(o.paymentMethod==="qr") return s+(o.total||0);
     return s;
-  },0);
+  },0)+qrAdj;
+  // adjustment วันที่แสดงอยู่ (dispDate)
+  const adjDispDate=data.orders.find(o=>o.type==="adjustment"&&o.date===dispDate)||null;
   const todayLdgr=ledger.filter(e=>e.type==="category"&&e.ts?.split("T")[0]>=from&&e.ts?.split("T")[0]<=to);
   const locked=todayLdgr.reduce((a,e)=>({cost:a.cost+(e.cost||0),profit:a.profit+(e.netProfit||0)}),{cost:0,profit:0});
 
@@ -1374,7 +1494,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
     onLedgerCommit(entry,p); setCmtConf(null); setConsol("");
   }
 
-  const allOrders=data.orders.filter(o=>o.date>=from&&o.date<=to);
+  const allOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&o.type!=="adjustment");
   return(
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
       <div style={{fontWeight:700,fontSize:19,color:"#2C1810",marginBottom:16,display:"flex",alignItems:"center",gap:8}}><BarChart2 size={19}/> รายงานยอดขาย</div>
@@ -1403,6 +1523,18 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         {pendRev>0&&<div style={{background:"rgba(255,255,255,.06)",borderRadius:9,padding:"7px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"rgba(255,255,255,.5)"}}>⏳ รอบันทึกบัญชี ({pendUnits} รายการ)</span><span style={{fontSize:14,fontWeight:700,color:"#C8A882"}}>{baht(pendRev)}</span></div>}
       </div>
 
+      {/* ปุ่มปรับยอดประจำวัน */}
+      {from===to&&from===dispDate&&(()=>{
+        const adj=data.orders.find(o=>o.type==="adjustment"&&o.date===dispDate);
+        return(
+          <div style={{marginBottom:12,display:"flex",justifyContent:"flex-end"}}>
+            <button onClick={()=>setConf({type:"adjustment",existing:adj})}
+              style={{background:"#C84B4B",color:"#FFF",border:"none",borderRadius:9,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+              🔧 {adj?"แก้ไขการปรับยอด":"ปรับยอดวันนี้"}
+            </button>
+          </div>
+        );
+      })()}
       {/* Calc Area */}
       <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
         <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
@@ -1523,6 +1655,23 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
           {allOrders.length===0&&<div style={{textAlign:"center",color:"#9C8C7C",padding:"24px 0",fontSize:13}}>ไม่มีออเดอร์</div>}
           {/* จำกัดแสดง 5 รายการ scroll เฉพาะส่วน */}
           <div style={{maxHeight:420,overflowY:"auto",padding:"0 18px"}}>
+            {/* adjustment entry */}
+            {(()=>{
+              const adj=data.orders.find(o=>o.type==="adjustment"&&o.date===dispDate);
+              if(!adj||from!==to||from!==dispDate) return null;
+              return(
+                <div style={{background:"#FDE8E8",border:"1px solid #FCA5A5",borderRadius:11,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#C84B4B",marginBottom:3}}>🔧 ปรับยอดประจำวัน</div>
+                    <div style={{fontSize:11,color:"#C84B4B"}}>
+                      💵 เงินสด {adj.cashAdj>=0?"+":""}{(adj.cashAdj||0).toLocaleString()} บาท &nbsp;|&nbsp; 📱 โอนจ่าย {adj.qrAdj>=0?"+":""}{(adj.qrAdj||0).toLocaleString()} บาท
+                    </div>
+                  </div>
+                  <button onClick={()=>{if(window.confirm("ยืนยันลบการปรับยอด?")){onAdjustment(null,dispDate);}}}
+                    style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:7,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
+                </div>
+              );
+            })()}
             {[...allOrders].reverse().map(order=>(
               <div key={order.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #EDE4DA",opacity:order.isCanceled?0.6:1}}>
                 <div style={{width:4,borderRadius:4,alignSelf:"stretch",background:order.isCanceled?"#C84B4B":"#7A9E6B",flexShrink:0,minHeight:36}}/>
@@ -1530,7 +1679,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
                     <span style={{background:order.isCanceled?"#FDE8E8":"#EDE6DC",color:order.isCanceled?"#C84B4B":"#6B4F3A",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:700}}>{order.orderNum?fmtNum(order.orderNum):`#${order.id.slice(-4).toUpperCase()}`}</span>
                     <span style={{fontSize:11,color:"#9C8C7C"}}>{fmtDate(order.date)} {fmtTime(order.ts)}</span>
-                    {!order.isCanceled&&(order.paymentMethod==="split"?<span style={{background:"#F0F4FF",color:"#4A6B9E",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>💵📱 แบ่งจ่าย</span>:order.paymentMethod==="qr"?<span style={{background:"#EFF6FF",color:"#1D4ED8",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>โอนจ่าย</span>:<span style={{background:"#F0FFF4",color:"#166534",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>เงินสด</span>)}
+                    {!order.isCanceled&&(order.paymentMethod==="split"?<span style={{background:"#FEF9C3",color:"#B45309",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>💵📱 แบ่งจ่าย</span>:order.paymentMethod==="qr"?<span style={{background:"#EFF6FF",color:"#1D4ED8",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>โอนจ่าย</span>:<span style={{background:"#F0FFF4",color:"#166534",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>เงินสด</span>)}
                     {order.isCanceled&&<span style={{background:"#FDE8E8",color:"#C84B4B",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}}>⊘ ยกเลิก</span>}
                   </div>
                   <div style={{fontSize:11,color:"#8C7C6C",marginBottom:3,textDecoration:order.isCanceled?"line-through":"none"}}>{order.items.map(i=>`${i.name}(${i.variant})${i.note?` [${i.note}]`:""}×${i.qty}`).join(" · ")}</div>
@@ -1556,7 +1705,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
           <div style={{fontSize:13,color:"#8C7C6C",marginBottom:4}}>
             บิล {confModal.order.orderNum?fmtNum(confModal.order.orderNum):""} · {baht(confModal.order.total)}
           </div>
-          {confModal.order.paymentMethod==="split"&&<div style={{fontSize:12,background:"#F0F4FF",color:"#4A6B9E",borderRadius:8,padding:"5px 12px",marginBottom:14,display:"inline-block",fontWeight:600}}>
+          {confModal.order.paymentMethod==="split"&&<div style={{fontSize:12,background:"#FEF9C3",color:"#B45309",borderRadius:8,padding:"5px 12px",marginBottom:14,display:"inline-block",fontWeight:600}}>
             💵📱 ปัจจุบัน: แบ่งจ่าย (เงินสด ฿{(confModal.order.splitCash||0).toLocaleString()} + โอน ฿{(confModal.order.splitQR||0).toLocaleString()})
           </div>}
           {confModal.order.paymentMethod!=="split"&&<div style={{marginBottom:16}}/>}
@@ -1574,6 +1723,14 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         </div>
       </Overlay>}
       {confModal?.type==="viewReceipt"&&<Overlay onClose={()=>setConf(null)} wide><ChangeModal modal={{change:confModal.order.change,received:confModal.order.received,total:confModal.order.total,order:confModal.order,rcpt:confModal.rcpt}} onDismiss={()=>setConf(null)}/></Overlay>}
+      {confModal?.type==="adjustment"&&<AdjustmentModal
+        existing={confModal.existing}
+        dispDate={dispDate}
+        cashRev={cashRev-(adjToday.reduce((s,o)=>s+(o.cashAdj||0),0))}
+        qrRev={qrRev-(adjToday.reduce((s,o)=>s+(o.qrAdj||0),0))}
+        onSave={(cashAdj,qrAdj)=>{onAdjustment({cashAdj,qrAdj},dispDate);setConf(null);}}
+        onCancel={()=>setConf(null)}
+      />}
       {commitConfirm&&<Overlay onClose={()=>setCmtConf(null)}><div style={{textAlign:"center"}}>
         <BookOpen size={36} color="#2C1810" style={{margin:"0 auto 12px"}}/>
         <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>ยืนยันการบันทึกลงบัญชี</div>
@@ -2058,11 +2215,11 @@ function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,onConfirmS
       <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>รับเงิน</div>
       <div style={{fontSize:13,color:"#8C7C6C",marginBottom:12}}>ยอดชำระ: {baht(cartTotal)}</div>
       {hasPromptpay&&<button onClick={onConfirmQR}
-        style={{width:"100%",background:"#4A7C6B",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        style={{width:"100%",background:"#1D4ED8",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
         📱 ชำระด้วย QR Code (เงินทอน ฿0)
       </button>}
       {hasPromptpay&&<button onClick={()=>setShowSplit(true)}
-        style={{width:"100%",background:"#4A6B9E",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        style={{width:"100%",background:"#FEF9C3",color:"#92400E",border:"1px solid #FCD34D",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
         💵📱 เงินสด + โอนจ่าย
       </button>}
       <div style={{background:"#F5F0EA",borderRadius:12,padding:"12px 14px",fontSize:26,fontWeight:700,color:"#2C1810",textAlign:"right",marginBottom:12,minHeight:52}}>{disp?baht(parseInt(disp,10)):<span style={{color:"#C0B0A0",fontSize:18}}>ใส่จำนวนเงิน (เงินสด)</span>}</div>
@@ -2149,7 +2306,7 @@ function ChangeModal({modal,onDismiss}){
           </table>
           <Divider type={divMid2} length={divMid2Len}/>
           <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿{order.total?.toLocaleString()}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="split"?"#4A6B9E":order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="split"?"💵📱 แบ่งจ่าย":order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="split"?"#B45309":order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="split"?"💵📱 แบ่งจ่าย":order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
           {order.paymentMethod==="split"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>📱 โอนจ่าย</span><span style={{color:"#1D4ED8",fontWeight:600}}>฿{(order.splitQR||0).toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>💵 เงินสด</span><span style={{color:"#166534",fontWeight:600}}>฿{(order.splitCash||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
           {order.paymentMethod==="cash"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
           {qrPayload&&order.paymentMethod==="qr"&&<><Divider type={divMid3} length={divMid3Len}/><div style={{textAlign:"center"}}>{accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div></>}<QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
