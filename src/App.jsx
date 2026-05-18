@@ -315,6 +315,19 @@ export default function App() {
     }
   },[data,ledger,costs,ctof,rcpt,syncUp]);
 
+  const handleUpdatePayment=useCallback((id,method)=>{
+    setData(prev=>{
+      const updated={...prev,orders:prev.orders.map(o=>
+        o.id===id ? {...o,paymentMethod:method,received:o.total||0,change:0} : o
+      )};
+      ls_set(SK_DATA,updated);
+      isDirty.current=true;
+      localStorage.setItem("rt10_dirty","1");
+      syncUp(updated,ledger,costs,ctof,rcpt);
+      return updated;
+    });
+  },[ledger,costs,ctof,rcpt,syncUp]);
+
   const persistRcpt=r=>{ isDirty.current=true; localStorage.setItem("rt10_dirty","1"); setRcptSt(r); ls_set(SK_RCPT,r); };
 
   const handleRestore=async()=>{
@@ -478,7 +491,7 @@ export default function App() {
       {/* VIEWS */}
       {view==="pos"     && <PosView sortedCats={sortedCats} catProducts={catProducts} activeCat={activeCat} setActive={setActive} cart={cart} cartTotal={cartTotal} cartQty={cartQty} cartDone={cartDone} checkout={checkout} setCart={setCart} setModal={setModal} nextNum={nextNum} data={data} openEditModal={openEditModal} getLinked={getLinked} addToCart={addToCart}/>}
       {view==="manage"  && <ManageView data={data} persist={(nd,s)=>persist(nd,null,null,null,s)}/>}
-      {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={(id,method)=>persist({...data,orders:data.orders.map(o=>o.id===id?{...o,paymentMethod:method,received:o.total,change:0}:o)},true)}/>}
+      {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={handleUpdatePayment}/>}
       {view==="ledger"  && <LedgerView ledger={ledger} cash={cash} data={data} dispDate={dispDate} onUndoEntry={undoLedger} onAddCashTx={addCashTx}/>}
       {view==="rcptset" && <ReceiptSettingsView settings={rcpt} onSave={persistRcpt} onClearData={clearData}/>}
 
@@ -1822,11 +1835,11 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
       </div>
 
       {/* ── RIGHT: Live Preview ── */}
-      <div style={{flex:1,height:"100%",overflowY:"auto",padding:"24px 28px",background:"#EDE6DC",display:"flex",flexDirection:"column",alignItems:"center"}}>
-        <div style={{fontWeight:700,fontSize:15,color:"#6B4F3A",marginBottom:18,alignSelf:"flex-start"}}>ตัวอย่างบิล (Live Preview)</div>
+      <div style={{flex:1,height:"100%",overflowY:"auto",padding:"24px 28px",background:"#EDE6DC",display:"flex",flexDirection:"column"}}>
+        <div style={{fontWeight:700,fontSize:15,color:"#6B4F3A",marginBottom:18}}>ตัวอย่างบิล (Live Preview)</div>
 
         {/* Receipt paper */}
-        <div style={{background:activeBillColor,borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:360,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box",position:"relative",overflow:"hidden"}}>
+        <div style={{background:activeBillColor,borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:360,margin:"0 auto",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box",position:"relative",overflow:"hidden"}}>
           {/* Watermark overlay */}
           {form.watermark&&<div style={{position:"absolute",inset:0,zIndex:0,opacity:form.watermarkOpacity??0.08,backgroundImage:`url(${form.watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none"}}/>}
           <div style={{position:"relative",zIndex:1}}>
