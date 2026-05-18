@@ -485,7 +485,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.6</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.7</span>
       </div>
 
       {/* VIEWS */}
@@ -1679,16 +1679,31 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
 
   // helper render divider
   const Divider=({type,length=100})=>{
-    const w=length+"%";
-    if(type==="solid") return <div style={{margin:"8px auto",width:w,borderTop:"1px solid #ccc"}}/>;
-    if(type==="dashed") return <div style={{margin:"8px auto",width:w,borderTop:"1px dashed #bbb"}}/>;
-    // flower / heart — คำนวณจำนวนดวงจากความกว้างจริง receipt=360px
-    // แต่ละ ✿/♡ + space กว้างประมาณ 14px ที่ fontSize:10px
-    const char=type==="flower"?"✿ ":"♡ ";
-    const charWidth=14;
+    // receipt กว้าง 360px คงที่ — คำนวณ px จริงจาก length%
     const containerPx=360*(length/100);
+    const w=length+"%";
+    // เส้นทึบ/ประ — ใช้ CSS border แม่นยำ 100% ไม่มีล้น
+    if(type==="solid") return(
+      <div style={{margin:"8px auto",width:w,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:"100%",borderTop:"1px solid #ccc"}}/>
+      </div>
+    );
+    if(type==="dashed") return(
+      <div style={{margin:"8px auto",width:w,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:"100%",borderTop:"1px dashed #bbb"}}/>
+      </div>
+    );
+    // ดอกไม้/หัวใจ — คำนวณ n จาก charWidth 18px ให้พอดีไม่ล้น
+    // จัดกึ่งกลางด้วย flexbox ไม่ใช่ textAlign
+    const char=type==="flower"?"✿ ":"♡ ";
+    const charWidth=18;
     const n=Math.max(1,Math.floor(containerPx/charWidth));
-    return <div style={{margin:"8px auto",width:w,fontSize:10,color:"#bbb",letterSpacing:2,textAlign:"center",whiteSpace:"nowrap"}}>{char.repeat(n)}</div>;
+    const actualWidth=n*charWidth;
+    return(
+      <div style={{margin:"8px auto",width:w,display:"flex",justifyContent:"center",overflow:"hidden"}}>
+        <div style={{fontSize:10,color:"#bbb",letterSpacing:2,whiteSpace:"nowrap",width:actualWidth+"px",textAlign:"center"}}>{char.repeat(n)}</div>
+      </div>
+    );
   };
 
   return(
@@ -1953,16 +1968,31 @@ function ChangeModal({modal,onDismiss}){
   const divMid3=rcpt.dividerMid3||"dashed", divMid3Len=rcpt.dividerMid3Len??100;
   const divBot1=rcpt.dividerBot1||"dashed", divBot1Len=rcpt.dividerBot1Len??100;
   const Divider=({type,length=100})=>{
-    const w=length+"%";
-    if(type==="solid") return <div style={{margin:"8px auto",width:w,borderTop:"1px solid #ccc"}}/>;
-    if(type==="dashed") return <div style={{margin:"8px auto",width:w,borderTop:"1px dashed #bbb"}}/>;
-    // flower / heart — คำนวณจำนวนดวงจากความกว้างจริง receipt=360px
-    // แต่ละ ✿/♡ + space กว้างประมาณ 14px ที่ fontSize:10px
-    const char=type==="flower"?"✿ ":"♡ ";
-    const charWidth=14;
+    // receipt กว้าง 360px คงที่ — คำนวณ px จริงจาก length%
     const containerPx=360*(length/100);
+    const w=length+"%";
+    // เส้นทึบ/ประ — ใช้ CSS border แม่นยำ 100% ไม่มีล้น
+    if(type==="solid") return(
+      <div style={{margin:"8px auto",width:w,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:"100%",borderTop:"1px solid #ccc"}}/>
+      </div>
+    );
+    if(type==="dashed") return(
+      <div style={{margin:"8px auto",width:w,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:"100%",borderTop:"1px dashed #bbb"}}/>
+      </div>
+    );
+    // ดอกไม้/หัวใจ — คำนวณ n จาก charWidth 18px ให้พอดีไม่ล้น
+    // จัดกึ่งกลางด้วย flexbox ไม่ใช่ textAlign
+    const char=type==="flower"?"✿ ":"♡ ";
+    const charWidth=18;
     const n=Math.max(1,Math.floor(containerPx/charWidth));
-    return <div style={{margin:"8px auto",width:w,fontSize:10,color:"#bbb",letterSpacing:2,textAlign:"center",whiteSpace:"nowrap"}}>{char.repeat(n)}</div>;
+    const actualWidth=n*charWidth;
+    return(
+      <div style={{margin:"8px auto",width:w,display:"flex",justifyContent:"center",overflow:"hidden"}}>
+        <div style={{fontSize:10,color:"#bbb",letterSpacing:2,whiteSpace:"nowrap",width:actualWidth+"px",textAlign:"center"}}>{char.repeat(n)}</div>
+      </div>
+    );
   };
   const isChange=modal.change!==undefined&&modal.received!==undefined;
 
