@@ -317,9 +317,13 @@ export default function App() {
 
   const handleUpdatePayment=useCallback((id,method)=>{
     setData(prev=>{
-      const updated={...prev,orders:prev.orders.map(o=>
-        o.id===id ? {...o,paymentMethod:method,received:o.total||0,change:0} : o
-      )};
+      const updated={...prev,orders:prev.orders.map(o=>{
+        if(o.id!==id) return o;
+        const base={...o,paymentMethod:method,received:o.total||0,change:0};
+        // ถ้าเปลี่ยนจาก split → วิธีอื่น ให้ลบ splitCash/splitQR ออก
+        delete base.splitCash; delete base.splitQR;
+        return base;
+      })};
       ls_set(SK_DATA,updated);
       isDirty.current=true;
       localStorage.setItem("rt10_dirty","1");
@@ -422,16 +426,23 @@ export default function App() {
 
   // ── Checkout ──
   function checkout(){ if(!cart.length)return; if(dispDate!==todayStr()) setModal({type:"confirmOrderDate",date:dispDate,cartTotal}); else setModal({type:"payment",received:"",total:cartTotal}); }
-  function confirmPay(lastCart,lastTotal,paymentMethod="cash"){
-    const rcv=paymentMethod==="qr"?lastTotal:parseInt(modal.received||"0",10);
+  function confirmPay(lastCart,lastTotal,paymentMethod="cash",splitCash=0,splitQR=0){
+    const rcv=paymentMethod==="qr"?lastTotal:paymentMethod==="split"?lastTotal:parseInt(modal.received||"0",10);
     if(paymentMethod==="cash"&&rcv<lastTotal)return;
+    if(paymentMethod==="split"&&Math.round((splitCash+splitQR)*100)!==Math.round(lastTotal*100))return;
     const orderNum=getNextOrderNum(data.orders,dispDate);
-    const order={id:uid(),orderNum,date:dispDate,items:[...lastCart],total:lastTotal,received:rcv,change:rcv-lastTotal,paymentMethod,ts:new Date().toISOString(),isCanceled:false};
+    const order={
+      id:uid(),orderNum,date:dispDate,items:[...lastCart],total:lastTotal,
+      received:paymentMethod==="split"?lastTotal:rcv,
+      change:paymentMethod==="split"?0:rcv-lastTotal,
+      paymentMethod,
+      ...(paymentMethod==="split"?{splitCash,splitQR}:{}),
+      ts:new Date().toISOString(),isCanceled:false
+    };
     const updatedOrders=[...data.orders,order].slice(-MAX_ORDERS);
     persist({...data,orders:updatedOrders},null,null,null,true);
-    // setNN ต้องอ่านจาก updatedOrders (รวม order ใหม่แล้ว) ไม่ใช่ data.orders เดิม
     setNN(peekOrderNum(updatedOrders,dispDate));
-    setModal({type:"change",change:rcv-lastTotal,received:rcv,total:lastTotal,order,rcpt});
+    setModal({type:"change",change:order.change,received:order.received,total:lastTotal,order,rcpt});
   }
   function dismissChange(){ setCart([]); setNN(peekOrderNum(data.orders,dispDate)); setModal(null); }
   function voidOrder(id){ persist({...data,orders:data.orders.map(o=>o.id===id?{...o,isCanceled:true}:o)},null,null,null,true); }
@@ -482,13 +493,22 @@ export default function App() {
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
         <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger}/>
+        {(()=>{
+          if(!data.orders||data.orders.length===0) return null;
+          const sorted=[...data.orders].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+          const oldestDate=sorted[0].date||sorted[0].ts?.split("T")[0]||todayStr();
+          const days=Math.floor((new Date()-new Date(oldestDate+"T00:00:00"))/(1000*60*60*24));
+          if(days<390) return null;
+          const color=days>=396?"#C96C6C":"#C87941";
+          return <span style={{fontSize:11,color,fontWeight:700,letterSpacing:"0.03em"}}>({days}/400)</span>;
+        })()}
         <div style={{flex:1}}/>
         <DatePill dispDate={dispDate} badge={badge} onChangeRequest={requestDateChange}/>
         {badge&&<button onClick={()=>{setDD(todayStr());setNN(peekOrderNum(data.orders,todayStr()));}} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.2)",color:"#C8A882",borderRadius:20,padding:"7px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13}/> รีเซ็ต</button>}
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.9</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.0</span>
       </div>
 
       {/* VIEWS */}
@@ -501,7 +521,7 @@ export default function App() {
       {/* MODALS */}
       {modal?.type==="order"&&<Overlay onClose={()=>setModal(null)} wide><OrderModal product={modal.product} linked={getLinked(modal.product)} onConfirm={(v,ao,fr,dis)=>{addToCart(modal.product,v,ao,fr,dis);setModal(null);}}/></Overlay>}
       {modal?.type==="editCartItem"&&<Overlay onClose={()=>setModal(null)} wide><OrderModal product={modal.product} linked={getLinked(modal.product)} isEditing initV={modal.initV} initAo={modal.initAo} initFree={modal.initFree} initDis={modal.initDis} onConfirm={(v,ao,fr,dis)=>{updateCartItem(modal.oldKey,modal.product,v,ao,fr,dis,modal.oldQty);setModal(null);}}/></Overlay>}
-      {modal?.type==="payment"&&<Overlay onClose={()=>setModal(null)} wide><PaymentModal modal={modal} setModal={setModal} cartTotal={cartTotal} rcpt={rcpt} onConfirm={()=>confirmPay(cart,cartTotal,"cash")} onConfirmQR={()=>confirmPay(cart,cartTotal,"qr")}/></Overlay>}
+      {modal?.type==="payment"&&<Overlay onClose={()=>setModal(null)} wide><PaymentModal modal={modal} setModal={setModal} cartTotal={cartTotal} rcpt={rcpt} onConfirm={()=>confirmPay(cart,cartTotal,"cash")} onConfirmQR={()=>confirmPay(cart,cartTotal,"qr")} onConfirmSplit={(sc,sq)=>confirmPay(cart,cartTotal,"split",sc,sq)}/></Overlay>}
       {modal?.type==="change"&&<Overlay onClose={dismissChange} wide><ChangeModal modal={modal} onDismiss={dismissChange}/></Overlay>}
       {modal?.type==="viewReceipt"&&<Overlay onClose={()=>setModal(null)} wide><ChangeModal modal={modal} onDismiss={()=>setModal(null)}/></Overlay>}
       {modal?.type==="alert"&&<Overlay onClose={()=>setModal(null)}><AlertModal msg={modal.msg} onClose={()=>setModal(null)}/></Overlay>}
@@ -560,8 +580,8 @@ function SyncIndicator({syncSt,onRestore,orders,ledger}){
     return {pct,days,oldestDate};
   },[orders]);
 
-  // สี circular progress ตาม %
-  const pctColor = storageInfo.pct>=90?"#C84B4B":storageInfo.pct>=70?"#C87941":"#6CC97A";
+  // สี circular progress ตาม threshold ที่ตกลงไว้ (390/396 วัน)
+  const pctColor = storageInfo.days>=396?"#C84B4B":storageInfo.days>=390?"#C87941":"#6CC97A";
 
   // SVG circular progress
   const r=22, circ=2*Math.PI*r;
@@ -601,7 +621,7 @@ function SyncIndicator({syncSt,onRestore,orders,ledger}){
               {storageInfo.days} / 400 วัน<br/>
               {storageInfo.oldestDate?<span>ข้อมูลเก่าสุด: {fmtDateS(storageInfo.oldestDate)}</span>:<span>ยังไม่มีออเดอร์</span>}
             </div>
-            {storageInfo.pct>=90&&<div style={{fontSize:10,color:"#C84B4B",marginTop:4,fontWeight:600}}>⚠️ ใกล้ถึงรอบล้างข้อมูลเก่า</div>}
+            {storageInfo.days>=390&&<div style={{fontSize:10,color:storageInfo.days>=396?"#C84B4B":"#C87941",marginTop:4,fontWeight:600}}>{storageInfo.days>=396?"🔴 ข้อมูลใกล้ถูกตัดมาก!":"🟠 ใกล้ถึงรอบล้างข้อมูลเก่า"}</div>}
           </div>
         </div>
 
@@ -1296,8 +1316,17 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   // กรองตาม date range (from/to) ไม่ใช่แค่วันนี้
   const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
-  const cashRev=todayOrders.filter(o=>o.paymentMethod!=="qr").reduce((s,o)=>s+(o.total||0),0);
-  const qrRev  =todayOrders.filter(o=>o.paymentMethod==="qr").reduce((s,o)=>s+(o.total||0),0);
+  // split order: นับ splitCash → cashRev, splitQR → qrRev
+  const cashRev=todayOrders.reduce((s,o)=>{
+    if(o.paymentMethod==="split") return s+(o.splitCash||0);
+    if(o.paymentMethod==="qr") return s;
+    return s+(o.total||0);
+  },0);
+  const qrRev=todayOrders.reduce((s,o)=>{
+    if(o.paymentMethod==="split") return s+(o.splitQR||0);
+    if(o.paymentMethod==="qr") return s+(o.total||0);
+    return s;
+  },0);
   const todayLdgr=ledger.filter(e=>e.type==="category"&&e.ts?.split("T")[0]>=from&&e.ts?.split("T")[0]<=to);
   const locked=todayLdgr.reduce((a,e)=>({cost:a.cost+(e.cost||0),profit:a.profit+(e.netProfit||0)}),{cost:0,profit:0});
 
@@ -1438,6 +1467,52 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         </div>);
       })()}
 
+
+      {/* กราฟยอดขายรายเดือน — ดึงจาก Ledger */}
+      {(()=>{
+        const MONTH_NAMES=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+        // รวมยอดขายจาก Ledger entries ประเภท category แยกตาม ปี-เดือน
+        const monthMap={};
+        ledger.filter(e=>e.type==="category"&&e.ts).forEach(e=>{
+          const d=new Date(e.ts);
+          const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+          if(!monthMap[key]) monthMap[key]={key,year:d.getFullYear(),month:d.getMonth(),revenue:0,profit:0};
+          monthMap[key].revenue+=(e.revenue||0);
+          monthMap[key].profit+=(e.netProfit||0);
+        });
+        const months=Object.values(monthMap).sort((a,b)=>a.key.localeCompare(b.key)).slice(-13);
+        if(!months.length) return null;
+        const maxRev=Math.max(...months.map(m=>m.revenue),1);
+        const today=new Date();
+        return(
+          <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
+            <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:4}}>📈 ยอดขายรายเดือน</div>
+            <div style={{fontSize:11,color:"#9C8C7C",marginBottom:14}}>ข้อมูลจากบัญชีที่บันทึกแล้ว</div>
+            <div style={{display:"flex",alignItems:"flex-end",gap:6,height:140,overflowX:"auto",paddingBottom:4}}>
+              {months.map(m=>{
+                const barH=Math.max(4,Math.round((m.revenue/maxRev)*120));
+                const isCurrentMonth=m.year===today.getFullYear()&&m.month===today.getMonth();
+                return(
+                  <div key={m.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:38,flex:"1 0 38px"}}>
+                    <div style={{fontSize:10,color:"#6B4F3A",fontWeight:700,whiteSpace:"nowrap"}}>{m.revenue>=1000?`${(m.revenue/1000).toFixed(1)}k`:m.revenue}</div>
+                    <div style={{width:"100%",background:isCurrentMonth?"#D4A574":"#6B4F3A",borderRadius:"4px 4px 0 0",height:barH,opacity:isCurrentMonth?1:0.75,transition:"height .3s ease",position:"relative"}}>
+                      {isCurrentMonth&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:6,height:6,borderRadius:"50%",background:"#D4A574",border:"2px solid #2C1810"}}/>}
+                    </div>
+                    <div style={{fontSize:10,color:isCurrentMonth?"#2C1810":"#8C7C6C",fontWeight:isCurrentMonth?700:400,textAlign:"center",lineHeight:1.3}}>
+                      {MONTH_NAMES[m.month]}<br/><span style={{fontSize:9,color:"#B0A090"}}>{String(m.year).slice(2)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {months.length>0&&<div style={{display:"flex",justifyContent:"space-between",marginTop:10,fontSize:11,color:"#8C7C6C",borderTop:"1px solid #EDE4DA",paddingTop:8}}>
+              <span>สูงสุด: <b style={{color:"#2C1810"}}>{baht(Math.max(...months.map(m=>m.revenue)))}</b></span>
+              <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:"#D4A574"}}/> เดือนปัจจุบัน</span>
+            </div>}
+          </div>
+        );
+      })()}
+
       {/* Order history */}
       <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,overflow:"hidden",marginBottom:18}}>
         <div onClick={()=>setHist(!histOpen)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",cursor:"pointer",background:"#F5EEE6"}}>
@@ -1455,7 +1530,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
                     <span style={{background:order.isCanceled?"#FDE8E8":"#EDE6DC",color:order.isCanceled?"#C84B4B":"#6B4F3A",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:700}}>{order.orderNum?fmtNum(order.orderNum):`#${order.id.slice(-4).toUpperCase()}`}</span>
                     <span style={{fontSize:11,color:"#9C8C7C"}}>{fmtDate(order.date)} {fmtTime(order.ts)}</span>
-                    {!order.isCanceled&&(order.paymentMethod==="qr"?<span style={{background:"#EFF6FF",color:"#1D4ED8",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>โอนจ่าย</span>:<span style={{background:"#F0FFF4",color:"#166534",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>เงินสด</span>)}
+                    {!order.isCanceled&&(order.paymentMethod==="split"?<span style={{background:"#F0F4FF",color:"#4A6B9E",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>💵📱 แบ่งจ่าย</span>:order.paymentMethod==="qr"?<span style={{background:"#EFF6FF",color:"#1D4ED8",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>โอนจ่าย</span>:<span style={{background:"#F0FFF4",color:"#166534",borderRadius:8,padding:"1px 7px",fontSize:10,fontWeight:600}}>เงินสด</span>)}
                     {order.isCanceled&&<span style={{background:"#FDE8E8",color:"#C84B4B",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}}>⊘ ยกเลิก</span>}
                   </div>
                   <div style={{fontSize:11,color:"#8C7C6C",marginBottom:3,textDecoration:order.isCanceled?"line-through":"none"}}>{order.items.map(i=>`${i.name}(${i.variant})${i.note?` [${i.note}]`:""}×${i.qty}`).join(" · ")}</div>
@@ -1478,13 +1553,17 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         <div style={{textAlign:"center"}}>
           <RefreshCw size={32} color="#1D4ED8" style={{margin:"0 auto 12px"}}/>
           <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>เปลี่ยนวิธีชำระเงิน</div>
-          <div style={{fontSize:13,color:"#8C7C6C",marginBottom:20}}>
+          <div style={{fontSize:13,color:"#8C7C6C",marginBottom:4}}>
             บิล {confModal.order.orderNum?fmtNum(confModal.order.orderNum):""} · {baht(confModal.order.total)}
           </div>
-          <div style={{display:"flex",gap:12,marginBottom:20}}>
+          {confModal.order.paymentMethod==="split"&&<div style={{fontSize:12,background:"#F0F4FF",color:"#4A6B9E",borderRadius:8,padding:"5px 12px",marginBottom:14,display:"inline-block",fontWeight:600}}>
+            💵📱 ปัจจุบัน: แบ่งจ่าย (เงินสด ฿{(confModal.order.splitCash||0).toLocaleString()} + โอน ฿{(confModal.order.splitQR||0).toLocaleString()})
+          </div>}
+          {confModal.order.paymentMethod!=="split"&&<div style={{marginBottom:16}}/>}
+          <div style={{display:"flex",gap:12,marginBottom:14}}>
             <button onClick={()=>{onUpdatePayment(confModal.order.id,"cash");setConf(null);}}
-              style={{flex:1,background:confModal.order.paymentMethod!=="qr"?"#2C1810":"#F0E8DC",color:confModal.order.paymentMethod!=="qr"?"#FFF":"#5C4A36",border:`2px solid ${confModal.order.paymentMethod!=="qr"?"#2C1810":"#D4C4B0"}`,borderRadius:12,padding:"16px 8px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-              💵 เงินสด{confModal.order.paymentMethod!=="qr"&&<div style={{fontSize:11,fontWeight:400,marginTop:4,opacity:.7}}>วิธีปัจจุบัน</div>}
+              style={{flex:1,background:confModal.order.paymentMethod==="cash"?"#2C1810":"#F0E8DC",color:confModal.order.paymentMethod==="cash"?"#FFF":"#5C4A36",border:`2px solid ${confModal.order.paymentMethod==="cash"?"#2C1810":"#D4C4B0"}`,borderRadius:12,padding:"16px 8px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              💵 เงินสด{confModal.order.paymentMethod==="cash"&&<div style={{fontSize:11,fontWeight:400,marginTop:4,opacity:.7}}>วิธีปัจจุบัน</div>}
             </button>
             <button onClick={()=>{onUpdatePayment(confModal.order.id,"qr");setConf(null);}}
               style={{flex:1,background:confModal.order.paymentMethod==="qr"?"#1D4ED8":"#F0E8DC",color:confModal.order.paymentMethod==="qr"?"#FFF":"#5C4A36",border:`2px solid ${confModal.order.paymentMethod==="qr"?"#1D4ED8":"#D4C4B0"}`,borderRadius:12,padding:"16px 8px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
@@ -1921,8 +2000,11 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
 // ══════════════════════════════════════════════════
 // PAYMENT & CHANGE MODALS
 // ══════════════════════════════════════════════════
-function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,rcpt}){
+function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,onConfirmSplit,rcpt}){
   const [disp,setDisp]=useState(modal.received||"");
+  const [showSplit,setShowSplit]=useState(false);
+  const [splitQRDisp,setSplitQRDisp]=useState("");
+  const [splitCashDisp,setSplitCashDisp]=useState("");
   const rcv=parseInt(disp||"0",10);
   const press=v=>{
     if(v==="C"){setDisp("");setModal(m=>({...m,received:""}));return;}
@@ -1931,14 +2013,54 @@ function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,rcpt}){
   };
   const sc=val=>{const n=String(rcv+val);setDisp(n);setModal(m=>({...m,received:n}));};
   const hasPromptpay=!!(rcpt?.promptpay);
+
+  // split logic
+  const splitQRNum=parseInt(splitQRDisp||"0",10);
+  const splitCashNum=parseInt(splitCashDisp||"0",10);
+  const splitSum=splitQRNum+splitCashNum;
+  const splitOK=splitSum===cartTotal&&splitQRNum>0&&splitCashNum>0;
+
+  if(showSplit) return(
+    <div>
+      <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>💵📱 แบ่งชำระ</div>
+      <div style={{fontSize:13,color:"#8C7C6C",marginBottom:16}}>ยอดรวม: {baht(cartTotal)}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
+        <div style={{background:"#F5F0EA",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:12,color:"#8C7C6C",marginBottom:6}}>📱 ยอดโอนจ่าย (฿)</div>
+          <input type="number" value={splitQRDisp} onChange={e=>{setSplitQRDisp(e.target.value);setSplitCashDisp(String(Math.max(0,cartTotal-parseInt(e.target.value||"0",10))));}}
+            placeholder="0" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1px solid #D4C4B0",fontSize:22,fontWeight:700,color:"#1D4ED8",background:"#EFF6FF",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{background:"#F5F0EA",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:12,color:"#8C7C6C",marginBottom:6}}>💵 ยอดเงินสด (฿)</div>
+          <input type="number" value={splitCashDisp} onChange={e=>{setSplitCashDisp(e.target.value);setSplitQRDisp(String(Math.max(0,cartTotal-parseInt(e.target.value||"0",10))));}}
+            placeholder="0" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1px solid #D4C4B0",fontSize:22,fontWeight:700,color:"#166534",background:"#F0FFF4",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+        </div>
+      </div>
+      <div style={{background:splitOK?"#EDF7ED":splitSum>cartTotal?"#FDE8E8":"#F5F0EA",border:`1px solid ${splitOK?"#A8D8A8":splitSum>cartTotal?"#FCA5A5":"#D4C4B0"}`,borderRadius:10,padding:"9px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:13,color:splitOK?"#3A7A3A":splitSum>cartTotal?"#C84B4B":"#8C7C6C"}}>
+          {splitOK?"✅ ยอดครบถ้วน":splitSum>cartTotal?"⚠️ ยอดเกิน":splitSum===0?"กรอกยอดโอนหรือเงินสด":`ขาดอีก ${baht(cartTotal-splitSum)}`}
+        </span>
+        <span style={{fontWeight:700,fontSize:15,color:splitOK?"#2A6A2A":splitSum>cartTotal?"#C84B4B":"#8C7C6C"}}>{baht(splitSum)} / {baht(cartTotal)}</span>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>setShowSplit(false)} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:12,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>ย้อนกลับ</button>
+        <button onClick={()=>splitOK&&onConfirmSplit(splitCashNum,splitQRNum)} disabled={!splitOK}
+          style={{flex:2,background:splitOK?"#2C1810":"#C0B0A0",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:15,fontWeight:700,cursor:splitOK?"pointer":"not-allowed",fontFamily:"inherit"}}>✅ ยืนยันแบ่งชำระ</button>
+      </div>
+    </div>
+  );
+
   return(
     <div>
       <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>รับเงิน</div>
       <div style={{fontSize:13,color:"#8C7C6C",marginBottom:12}}>ยอดชำระ: {baht(cartTotal)}</div>
-      {/* ปุ่ม QR ชำระ — เงินทอน 0 ทันที */}
       {hasPromptpay&&<button onClick={onConfirmQR}
-        style={{width:"100%",background:"#4A7C6B",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        style={{width:"100%",background:"#4A7C6B",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
         📱 ชำระด้วย QR Code (เงินทอน ฿0)
+      </button>}
+      {hasPromptpay&&<button onClick={()=>setShowSplit(true)}
+        style={{width:"100%",background:"#4A6B9E",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        💵📱 เงินสด + โอนจ่าย
       </button>}
       <div style={{background:"#F5F0EA",borderRadius:12,padding:"12px 14px",fontSize:26,fontWeight:700,color:"#2C1810",textAlign:"right",marginBottom:12,minHeight:52}}>{disp?baht(parseInt(disp,10)):<span style={{color:"#C0B0A0",fontSize:18}}>ใส่จำนวนเงิน (เงินสด)</span>}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:11}}>{[10,20,50,100,500,1000].map(v=><button key={v} onClick={()=>sc(v)} style={{flex:"1 1 74px",background:"#EDE6DC",border:"none",borderRadius:9,padding:"9px 4px",fontSize:14,fontWeight:600,color:"#6B4F3A",cursor:"pointer",fontFamily:"inherit"}}>+{v}</button>)}</div>
@@ -2022,8 +2144,9 @@ function ChangeModal({modal,onDismiss}){
             <tbody>{order.items.map((item,i)=><tr key={i}><td style={{padding:"3px 0",lineHeight:1.5,wordBreak:"break-word",paddingRight:4}}>{item.name} <span style={{color:"#666",fontSize:10}}>({item.variant})</span>{item.note&&<div style={{fontSize:9,color:"#888"}}>— {item.note}</div>}</td><td style={{textAlign:"center",whiteSpace:"nowrap"}}>{item.qty} {item.unit||""}</td><td style={{textAlign:"right",whiteSpace:"nowrap",fontWeight:600}}>฿{(item.price*item.qty).toLocaleString()}</td></tr>)}</tbody>
           </table>
           <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿{order.total?.toLocaleString()}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
-          {order.paymentMethod!=="qr"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="split"?"#4A6B9E":order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="split"?"💵📱 แบ่งจ่าย":order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
+          {order.paymentMethod==="split"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>📱 โอนจ่าย</span><span style={{color:"#1D4ED8",fontWeight:600}}>฿{(order.splitQR||0).toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>💵 เงินสด</span><span style={{color:"#166534",fontWeight:600}}>฿{(order.splitCash||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
+          {order.paymentMethod==="cash"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
           {qrPayload&&order.paymentMethod==="qr"&&<><Divider type={divMid3} length={divMid3Len}/><div style={{textAlign:"center"}}>{accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div></>}<QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
           <Divider type={divBot1} length={divBot1Len}/>
           <div style={{fontSize:12,color:"#444"}}>{thankMsg}</div>
@@ -2039,3 +2162,4 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
+
