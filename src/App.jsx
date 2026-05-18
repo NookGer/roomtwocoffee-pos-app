@@ -1453,7 +1453,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         const rTot=raw.reduce((a,s)=>a+s.rev,0);
         if(!raw.length)return null;
         return(<div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
-          <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:12}}>ยอดขายตามหมวดหมู่</div>
+          <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:12}}>ยอดขายตามหมวดหมู่ <span style={{fontWeight:400,fontSize:12,color:"#8C7C6C"}}>({raw.reduce((a,s)=>a+s.units,0)} {raw.length===1?raw[0].unitName:"หน่วย"})</span></div>
           {raw.map(s=>(
             <div key={s.cat.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
               <div style={{width:11,height:11,borderRadius:3,background:s.cat.color,flexShrink:0}}/>
@@ -1499,7 +1499,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
                       {isCurrentMonth&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:6,height:6,borderRadius:"50%",background:"#D4A574",border:"2px solid #2C1810"}}/>}
                     </div>
                     <div style={{fontSize:10,color:isCurrentMonth?"#2C1810":"#8C7C6C",fontWeight:isCurrentMonth?700:400,textAlign:"center",lineHeight:1.3}}>
-                      {MONTH_NAMES[m.month]}<br/><span style={{fontSize:9,color:"#B0A090"}}>{String(m.year).slice(2)}</span>
+                      {MONTH_NAMES[m.month]}<br/><span style={{fontSize:9,color:"#B0A090"}}>{m.year+543}</span>
                     </div>
                   </div>
                 );
