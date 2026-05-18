@@ -508,7 +508,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.0</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.1</span>
       </div>
 
       {/* VIEWS */}
@@ -1944,9 +1944,9 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
 
         {/* Receipt paper — 360px เหมือนบิลจริง, scroll ได้เมื่อบิลยาว */}
         <div style={{width:"100%",maxWidth:360,margin:"0 auto",position:"relative",borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)"}}>
-          {/* Watermark — overflow:hidden แยกออกมา ไม่ตัดความยาวบิล */}
-          {form.watermark&&<div style={{position:"absolute",inset:0,zIndex:0,opacity:form.watermarkOpacity??0.08,backgroundImage:`url(${form.watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none",borderRadius:12,overflow:"hidden"}}/>}
           <div style={{background:activeBillColor,borderRadius:12,padding:"24px 20px",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box",position:"relative",zIndex:1}}>
+          {/* Watermark — อยู่เหนือพื้นหลังสี แต่ใต้ content */}
+          {form.watermark&&<div style={{position:"absolute",inset:0,zIndex:1,opacity:form.watermarkOpacity??0.08,backgroundImage:`url(${form.watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none",borderRadius:12,overflow:"hidden"}}/>}
 
           {/* Header */}
           {form.logo?<><img src={form.logo} alt="logo" style={{width:64,height:64,objectFit:"contain",margin:"0 auto 8px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{form.shopName||"ชื่อร้าน"}</div></>
@@ -2122,8 +2122,9 @@ function ChangeModal({modal,onDismiss}){
 
       {showR&&order&&<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4C4B0",marginBottom:4}}>
         <div ref={receiptRef} style={{background:billColor,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%",maxWidth:"360px",margin:"0 auto",boxSizing:"border-box",position:"relative",overflow:"hidden"}}>
-          {watermark&&<div style={{position:"absolute",inset:0,zIndex:0,opacity:watermarkOpacity,backgroundImage:`url(${watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none"}}/>}
-          <div style={{position:"relative",zIndex:1}}>
+          {/* Watermark — อยู่เหนือพื้นหลังสี แต่ใต้ content */}
+          {watermark&&<div style={{position:"absolute",inset:0,zIndex:1,opacity:watermarkOpacity,backgroundImage:`url(${watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none"}}/>}
+          <div style={{position:"relative",zIndex:2}}>
           {logo?<><img src={logo} alt="logo" style={{width:70,height:70,objectFit:"contain",margin:"0 auto 6px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{shop}</div></>:<div style={{fontWeight:700,fontSize:19,letterSpacing:"0.04em"}}>{shop}</div>}
           {staff&&<div style={{fontSize:12,color:"#444",marginTop:2}}>พนักงาน: {staff}</div>}
           {address&&<div style={{fontSize:11,color:"#555",marginTop:3,lineHeight:1.5}}>{address}</div>}
