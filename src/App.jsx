@@ -485,7 +485,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.4</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.5</span>
       </div>
 
       {/* VIEWS */}
@@ -1839,11 +1839,11 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
       <div style={{flex:1,height:"100%",overflowY:"auto",padding:"24px 28px",background:"#EDE6DC",display:"flex",flexDirection:"column"}}>
         <div style={{fontWeight:700,fontSize:15,color:"#6B4F3A",marginBottom:18}}>ตัวอย่างบิล (Live Preview)</div>
 
-        {/* Receipt paper */}
-        <div style={{background:activeBillColor,borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:520,margin:"0 auto",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box",position:"relative",overflow:"hidden"}}>
-          {/* Watermark overlay */}
-          {form.watermark&&<div style={{position:"absolute",inset:0,zIndex:0,opacity:form.watermarkOpacity??0.08,backgroundImage:`url(${form.watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none"}}/>}
-          <div style={{position:"relative",zIndex:1}}>
+        {/* Receipt paper — 360px เหมือนบิลจริง, scroll ได้เมื่อบิลยาว */}
+        <div style={{width:"100%",maxWidth:360,margin:"0 auto",position:"relative",borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)"}}>
+          {/* Watermark — overflow:hidden แยกออกมา ไม่ตัดความยาวบิล */}
+          {form.watermark&&<div style={{position:"absolute",inset:0,zIndex:0,opacity:form.watermarkOpacity??0.08,backgroundImage:`url(${form.watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none",borderRadius:12,overflow:"hidden"}}/>}
+          <div style={{background:activeBillColor,borderRadius:12,padding:"24px 20px",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box",position:"relative",zIndex:1}}>
 
           {/* Header */}
           {form.logo?<><img src={form.logo} alt="logo" style={{width:64,height:64,objectFit:"contain",margin:"0 auto 8px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{form.shopName||"ชื่อร้าน"}</div></>
@@ -1884,7 +1884,7 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
           <div style={{fontSize:12,color:"#444"}}>{form.thankMsg||"ขอบคุณที่ใช้บริการ"}</div>
           <div style={{fontSize:12,color:"#555",marginTop:3}}>{form.footerText||"★ RoomTwo Coffee ★"}</div>
           </div>{/* end content zIndex:1 */}
-        </div>
+        </div>{/* end receipt wrapper */}
 
         <div style={{fontSize:12,color:"#9C8C7C",marginTop:14,textAlign:"center"}}>
           {form.autoDayColor?`สีวันนี้ (${DAY_NAMES[todayDow]}) — เปลี่ยนทุกวันอัตโนมัติ`:"สีที่เลือกเอง"}
