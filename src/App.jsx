@@ -485,7 +485,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.5</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.6</span>
       </div>
 
       {/* VIEWS */}
@@ -1682,9 +1682,13 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
     const w=length+"%";
     if(type==="solid") return <div style={{margin:"8px auto",width:w,borderTop:"1px solid #ccc"}}/>;
     if(type==="dashed") return <div style={{margin:"8px auto",width:w,borderTop:"1px dashed #bbb"}}/>;
-    // flower / heart — repeat เยอะๆ ให้ CSS overflow:hidden ตัดให้พอดีกับ width
+    // flower / heart — คำนวณจำนวนดวงจากความกว้างจริง receipt=360px
+    // แต่ละ ✿/♡ + space กว้างประมาณ 14px ที่ fontSize:10px
     const char=type==="flower"?"✿ ":"♡ ";
-    return <div style={{margin:"8px auto",width:w,overflow:"hidden",whiteSpace:"nowrap",fontSize:10,color:"#bbb",letterSpacing:2,textAlign:"center"}}>{char.repeat(60)}</div>;
+    const charWidth=14;
+    const containerPx=360*(length/100);
+    const n=Math.max(1,Math.floor(containerPx/charWidth));
+    return <div style={{margin:"8px auto",width:w,fontSize:10,color:"#bbb",letterSpacing:2,textAlign:"center",whiteSpace:"nowrap"}}>{char.repeat(n)}</div>;
   };
 
   return(
@@ -1952,9 +1956,13 @@ function ChangeModal({modal,onDismiss}){
     const w=length+"%";
     if(type==="solid") return <div style={{margin:"8px auto",width:w,borderTop:"1px solid #ccc"}}/>;
     if(type==="dashed") return <div style={{margin:"8px auto",width:w,borderTop:"1px dashed #bbb"}}/>;
-    // flower / heart — repeat เยอะๆ ให้ CSS overflow:hidden ตัดให้พอดีกับ width
+    // flower / heart — คำนวณจำนวนดวงจากความกว้างจริง receipt=360px
+    // แต่ละ ✿/♡ + space กว้างประมาณ 14px ที่ fontSize:10px
     const char=type==="flower"?"✿ ":"♡ ";
-    return <div style={{margin:"8px auto",width:w,overflow:"hidden",whiteSpace:"nowrap",fontSize:10,color:"#bbb",letterSpacing:2,textAlign:"center"}}>{char.repeat(60)}</div>;
+    const charWidth=14;
+    const containerPx=360*(length/100);
+    const n=Math.max(1,Math.floor(containerPx/charWidth));
+    return <div style={{margin:"8px auto",width:w,fontSize:10,color:"#bbb",letterSpacing:2,textAlign:"center",whiteSpace:"nowrap"}}>{char.repeat(n)}</div>;
   };
   const isChange=modal.change!==undefined&&modal.received!==undefined;
 
