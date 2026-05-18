@@ -99,6 +99,7 @@ const DEF_RCPT = { shopName:"RoomTwo Coffee", staffName:"", thankMsg:"ขอบ�
   dividerTop1Len:100, dividerTop2Len:100,
   dividerMid1Len:100, dividerMid2Len:100, dividerMid3Len:100,
   dividerBot1Len:100,
+  watermark:null, watermarkOpacity:0.08,
   footerText:"★ RoomTwo Coffee ★",
 };
 const DEF_DATA = {
@@ -110,8 +111,18 @@ const DEF_CASH = { capital:0, profit:0 };
 // ── Helpers ──
 function ls_get(k,d){ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):d; }catch(e){return d;} }
 function ls_set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
-function getNextOrderNum(date){ const s=ls_get(SK_SEQ,{date:"",count:0}); const n=s.date===date?s.count+1:1; ls_set(SK_SEQ,{date,count:n}); return n; }
-function peekOrderNum(date){ const s=ls_get(SK_SEQ,{date:"",count:0}); return s.date===date?s.count+1:1; }
+// คำนวณเลขบิลจาก orders จริง ไม่ใช่ SK_SEQ แยก ป้องกันรีเซ็ตเมื่อ restore
+function getMaxOrderNum(orders, date){
+  const todayOrders = orders.filter(o=>o.date===date&&!o.isCanceled);
+  return todayOrders.length>0 ? Math.max(0,...todayOrders.map(o=>o.orderNum||0)) : 0;
+}
+function getNextOrderNum(orders, date){
+  const n = getMaxOrderNum(orders, date)+1;
+  // ยังเก็บ SK_SEQ ไว้เผื่อ fallback แต่ไม่ใช้แล้ว
+  ls_set(SK_SEQ,{date,count:n});
+  return n;
+}
+function peekOrderNum(orders, date){ return getMaxOrderNum(orders, date)+1; }
 function fmtNum(n){ return "#"+String(n).padStart(3,"0"); }
 
 const PALETTE=[
@@ -174,7 +185,7 @@ export default function App() {
   const [dispDate,setDD]   = useState(todayStr);
   const [pendDate,setPend] = useState(null);
   const [view,setView]     = useState("pos");
-  const [nextNum,setNN]    = useState(()=>peekOrderNum(todayStr()));
+  const [nextNum,setNN]    = useState(()=>peekOrderNum(ls_get(SK_DATA,DEF_DATA).orders||[], todayStr()));
   // isRestoring: ล็อค UI ขณะดึงข้อมูลจาก Supabase ป้องกัน user แก้ไขก่อนข้อมูลพร้อม
   const [isRestoring,setIsRestoring] = useState(()=>!localStorage.getItem(SK_DATA)&&navigator.onLine);
 
@@ -328,7 +339,9 @@ export default function App() {
         // บันทึก timestamp ของ Supabase ลง local เพื่อใช้เปรียบเทียบ conflict
         if(sbTs){ ls_set(SK_SYNC,{lastSynced:sbTs}); setSyncSt({status:"synced",lastSynced:sbTs}); }
         isDirty.current=false;
-        localStorage.removeItem("rt10_dirty"); // ข้อมูลตรงกับ Supabase แล้ว
+        localStorage.removeItem("rt10_dirty");
+        // อัปเดตเลขบิลจาก orders ที่ restore มา
+        setNN(peekOrderNum(d.orders||[], todayStr()));
       } else setModal({type:"alert",msg:"ไม่พบข้อมูลบน Supabase"});
     } catch(e){ setModal({type:"alert",msg:"เชื่อมต่อ Supabase ไม่ได้\n"+e.message}); }
     setSyncSt(s=>({...s,status:navigator.onLine?"synced":"offline"}));
@@ -391,20 +404,20 @@ export default function App() {
   const cartTotal=cart.reduce((s,i)=>s+i.price*i.qty,0);
 
   // ── Date ──
-  function requestDateChange(nd){ if(!nd)return; if(nd===todayStr()){setDD(nd);setNN(peekOrderNum(nd));return;} setPend(nd);setModal({type:"confirmDate",newDate:nd}); }
-  function confirmDateChange(){ if(pendDate){setDD(pendDate);setNN(peekOrderNum(pendDate));setPend(null);} setModal(null); }
+  function requestDateChange(nd){ if(!nd)return; if(nd===todayStr()){setDD(nd);setNN(peekOrderNum(data.orders,nd));return;} setPend(nd);setModal({type:"confirmDate",newDate:nd}); }
+  function confirmDateChange(){ if(pendDate){setDD(pendDate);setNN(peekOrderNum(data.orders,pendDate));setPend(null);} setModal(null); }
 
   // ── Checkout ──
   function checkout(){ if(!cart.length)return; if(dispDate!==todayStr()) setModal({type:"confirmOrderDate",date:dispDate,cartTotal}); else setModal({type:"payment",received:"",total:cartTotal}); }
   function confirmPay(lastCart,lastTotal,paymentMethod="cash"){
     const rcv=paymentMethod==="qr"?lastTotal:parseInt(modal.received||"0",10);
     if(paymentMethod==="cash"&&rcv<lastTotal)return;
-    const orderNum=getNextOrderNum(dispDate); setNN(peekOrderNum(dispDate));
+    const orderNum=getNextOrderNum(data.orders,dispDate); setNN(peekOrderNum(data.orders,dispDate));
     const order={id:uid(),orderNum,date:dispDate,items:[...lastCart],total:lastTotal,received:rcv,change:rcv-lastTotal,paymentMethod,ts:new Date().toISOString(),isCanceled:false};
     persist({...data,orders:[...data.orders,order].slice(-MAX_ORDERS)},null,null,null,true);
     setModal({type:"change",change:rcv-lastTotal,received:rcv,total:lastTotal,order,rcpt});
   }
-  function dismissChange(){ setCart([]); setNN(peekOrderNum(dispDate)); setModal(null); }
+  function dismissChange(){ setCart([]); setNN(peekOrderNum(data.orders,dispDate)); setModal(null); }
   function voidOrder(id){ persist({...data,orders:data.orders.map(o=>o.id===id?{...o,isCanceled:true}:o)},null,null,null,true); }
   function hardDelete(id){ persist({...data,orders:data.orders.filter(o=>o.id!==id)},null,null,null,true); }
 
@@ -455,11 +468,11 @@ export default function App() {
         <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger}/>
         <div style={{flex:1}}/>
         <DatePill dispDate={dispDate} badge={badge} onChangeRequest={requestDateChange}/>
-        {badge&&<button onClick={()=>{setDD(todayStr());setNN(peekOrderNum(todayStr()));}} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.2)",color:"#C8A882",borderRadius:20,padding:"7px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13}/> รีเซ็ต</button>}
+        {badge&&<button onClick={()=>{setDD(todayStr());setNN(peekOrderNum(data.orders,todayStr()));}} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.2)",color:"#C8A882",borderRadius:20,padding:"7px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13}/> รีเซ็ต</button>}
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.3.3</span>
       </div>
 
       {/* VIEWS */}
@@ -1618,6 +1631,24 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
   const [showClear,setShowClear]=useState(false);
   const [pin,setPin]=useState(""); const [pinErr,setPinErr]=useState(false);
   const logoRef=useRef();
+  const wmRef=useRef();
+
+  // compress รูปลายน้ำเป็น 360x360 JPG 70% ก่อนบันทึก
+  function compressWatermark(file,cb){
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        canvas.width=360; canvas.height=360;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,360,360);
+        cb(canvas.toDataURL('image/jpeg',0.7));
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   function handleClear(){
@@ -1740,6 +1771,33 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
           <Field label="ชื่อบัญชี"><input value={form.accountName||""} onChange={e=>upd("accountName",e.target.value)} placeholder="เช่น นาย สมชาย ใจดี" style={iStyle}/></Field>
         </div>
 
+        {/* ── ลายน้ำบิล ── */}
+        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:14,padding:20,display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+          <div style={{fontWeight:600,fontSize:14,color:"#2C1810"}}>🌊 ลายน้ำบิล</div>
+          <Field label="รูปลายน้ำ (แนะนำ PNG โปร่งใส 360×360px)">
+            <div style={{display:"flex",gap:12,alignItems:"center"}}>
+              {form.watermark&&<img src={form.watermark} alt="wm" style={{width:52,height:52,borderRadius:9,objectFit:"cover",border:"1px solid #D4C4B0",opacity:0.6}}/>}
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <button onClick={()=>wmRef.current?.click()} style={{background:"#F0E8DC",border:"1px solid #D4C4B0",borderRadius:8,padding:"6px 12px",fontSize:13,cursor:"pointer",color:"#5C4A36",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                  <Camera size={12}/> {form.watermark?"เปลี่ยนลายน้ำ":"อัปโหลดลายน้ำ"}
+                </button>
+                {form.watermark&&<button onClick={()=>upd("watermark",null)} style={{background:"none",border:"none",color:"#C84B4B",cursor:"pointer",fontSize:12,fontFamily:"inherit",textAlign:"left"}}>ลบลายน้ำ</button>}
+              </div>
+              <input ref={wmRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+                const f=e.target.files?.[0]; if(!f)return;
+                compressWatermark(f,b64=>upd("watermark",b64));
+              }}/>
+            </div>
+          </Field>
+          {form.watermark&&<Field label={`ความเข้ม: ${Math.round((form.watermarkOpacity??0.08)*100)}%`}>
+            <input type="range" min={5} max={50} step={1}
+              value={Math.round((form.watermarkOpacity??0.08)*100)}
+              onChange={e=>upd("watermarkOpacity",parseInt(e.target.value)/100)}
+              style={{width:"100%",accentColor:"#2C1810"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#9C8C7C",marginTop:3}}><span>5% (จางมาก)</span><span>50% (เข้ม)</span></div>
+          </Field>}
+        </div>
+
         <button onClick={()=>{onSave(form);setSaved(true);setTimeout(()=>setSaved(false),2000);}}
           style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:11,padding:"12px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,marginBottom:16}}>
           {saved?<><CheckCircle size={16}/> บันทึกแล้ว!</>:"บันทึกการตั้งค่า"}
@@ -1768,7 +1826,10 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
         <div style={{fontWeight:700,fontSize:15,color:"#6B4F3A",marginBottom:18,alignSelf:"flex-start"}}>ตัวอย่างบิล (Live Preview)</div>
 
         {/* Receipt paper */}
-        <div style={{background:activeBillColor,borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:360,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box"}}>
+        <div style={{background:activeBillColor,borderRadius:12,boxShadow:"0 4px 24px rgba(0,0,0,.12)",padding:"24px 20px",width:"100%",maxWidth:360,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",color:"#000",textAlign:"center",boxSizing:"border-box",position:"relative",overflow:"hidden"}}>
+          {/* Watermark overlay */}
+          {form.watermark&&<div style={{position:"absolute",inset:0,zIndex:0,opacity:form.watermarkOpacity??0.08,backgroundImage:`url(${form.watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none"}}/>}
+          <div style={{position:"relative",zIndex:1}}>
 
           {/* Header */}
           {form.logo?<><img src={form.logo} alt="logo" style={{width:64,height:64,objectFit:"contain",margin:"0 auto 8px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{form.shopName||"ชื่อร้าน"}</div></>
@@ -1816,6 +1877,7 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
           <Divider type={form.dividerBot1||"dashed"} length={form.dividerBot1Len??100}/>
           <div style={{fontSize:12,color:"#444"}}>{form.thankMsg||"ขอบคุณที่ใช้บริการ"}</div>
           <div style={{fontSize:12,color:"#555",marginTop:3}}>{form.footerText||"★ RoomTwo Coffee ★"}</div>
+          </div>{/* end content zIndex:1 */}
         </div>
 
         <div style={{fontSize:12,color:"#9C8C7C",marginTop:14,textAlign:"center"}}>
@@ -1870,6 +1932,8 @@ function ChangeModal({modal,onDismiss}){
   const promptpay=rcpt.promptpay||"";
   const accountName=rcpt.accountName||"";
   const footerText=rcpt.footerText||`★ ${shop} ★`;
+  const watermark=rcpt.watermark||null;
+  const watermarkOpacity=rcpt.watermarkOpacity??0.08;
   const todayDow=new Date().getDay();
   const billColor=rcpt.autoDayColor ? DAY_COLORS[todayDow] : (rcpt.billColor||"#FFFFFF");
   const divTop1=rcpt.dividerTop1||"dashed", divTop1Len=rcpt.dividerTop1Len??100;
@@ -1910,7 +1974,9 @@ function ChangeModal({modal,onDismiss}){
       </div>
 
       {showR&&order&&<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4C4B0",marginBottom:4}}>
-        <div ref={receiptRef} style={{background:billColor,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%",maxWidth:"360px",margin:"0 auto",boxSizing:"border-box"}}>
+        <div ref={receiptRef} style={{background:billColor,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",padding:"20px 18px",textAlign:"center",width:"100%",maxWidth:"360px",margin:"0 auto",boxSizing:"border-box",position:"relative",overflow:"hidden"}}>
+          {watermark&&<div style={{position:"absolute",inset:0,zIndex:0,opacity:watermarkOpacity,backgroundImage:`url(${watermark})`,backgroundSize:"180px 180px",backgroundRepeat:"repeat",pointerEvents:"none"}}/>}
+          <div style={{position:"relative",zIndex:1}}>
           {logo?<><img src={logo} alt="logo" style={{width:70,height:70,objectFit:"contain",margin:"0 auto 6px",display:"block"}}/><div style={{fontWeight:700,fontSize:16}}>{shop}</div></>:<div style={{fontWeight:700,fontSize:19,letterSpacing:"0.04em"}}>{shop}</div>}
           {staff&&<div style={{fontSize:12,color:"#444",marginTop:2}}>พนักงาน: {staff}</div>}
           {address&&<div style={{fontSize:11,color:"#555",marginTop:3,lineHeight:1.5}}>{address}</div>}
@@ -1936,6 +2002,7 @@ function ChangeModal({modal,onDismiss}){
           <Divider type={divBot1} length={divBot1Len}/>
           <div style={{fontSize:12,color:"#444"}}>{thankMsg}</div>
           <div style={{fontSize:12,color:"#555",marginTop:3}}>{footerText}</div>
+          </div>{/* end content zIndex:1 */}
         </div>
         <div style={{background:"#EDE6DC",padding:"10px 14px"}}>
           <button onClick={saveJpg} disabled={saving} style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:saving?0.7:1}}>
