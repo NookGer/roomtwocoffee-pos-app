@@ -209,6 +209,47 @@ export default function App() {
   },[data.categories]);
 
   // ── Dirty Flag ──
+  // isReadOnly — โหมดทดสอบระบบ ป้องกัน sync ขึ้น Supabase
+  // ล้างทุกครั้งที่เปิดแอปใหม่ → ปิดแอปแล้วโหมดหายเสมอ
+  const [isReadOnly,setIsReadOnly]=useState(false);
+  // ล้าง rt10_readonly ทันทีเมื่อ component mount (เปิดแอปใหม่)
+  useEffect(()=>{ localStorage.removeItem("rt10_readonly"); },[]);
+  // helper: ดึง Supabase + reset dirty ทุก state
+  const fetchAndResetDirty=async()=>{
+    try{
+      const snap=await sbFetch();
+      if(snap){
+        const d={...DEF_DATA,...snap.data};
+        if(!d.addons)d.addons=[];
+        if(!d.freeOpts)d.freeOpts=[];
+        if(!d.discounts)d.discounts=[];
+        setData(d);
+        if(snap.ledger)setLedger(snap.ledger);
+        if(snap.costs)setCosts(snap.costs);
+        if(snap.ctof)setCtof(snap.ctof);
+        if(snap.rcpt)setRcptSt(snap.rcpt);
+        ls_set_data(d);
+      }
+    }catch(e){}
+    // reset dirty ทุกชั้น
+    isDirty.current=false;
+    localStorage.removeItem("rt10_dirty");
+  };
+
+  const toggleReadOnly=async()=>{
+    if(!isReadOnly){
+      // เปิด Read-Only: ชั้น 1 — ดึง Supabase + reset dirty
+      await fetchAndResetDirty();
+      localStorage.setItem("rt10_readonly","1");
+      setIsReadOnly(true);
+    } else {
+      // ปิด Read-Only: ชั้น 3 — ดึง Supabase ใหม่ + reset dirty ทิ้งสิ่งที่กดมั่ว
+      localStorage.removeItem("rt10_readonly");
+      setIsReadOnly(false);
+      await fetchAndResetDirty();
+    }
+  };
+
   // isDirty = true เฉพาะเมื่อ user กระทำจริง
   // บันทึกลง localStorage ด้วย เผื่อปิดแอปก่อน sync เสร็จ
   const isDirty = useRef(false);
@@ -227,7 +268,7 @@ export default function App() {
       setSyncSt(s=>({...s,status:"synced"}));
       // ถ้า user เคยทำงาน offline มา (isDirty=true) ต้องเช็คก่อนว่า
       // Supabase มีข้อมูลใหม่กว่า local หรือเปล่า
-      if(isDirty.current){
+      if(isDirty.current&&localStorage.getItem("rt10_readonly")!=="1"){
         try{
           const snap=await sbFetch();
           if(snap){
@@ -265,6 +306,7 @@ export default function App() {
   const syncUp=useCallback((d,l,cs,ct,r)=>{
     if(!navigator.onLine)return;
     if(!isDirty.current)return;
+    if(localStorage.getItem("rt10_readonly")==="1")return; // โหมดดูข้อมูล — ไม่ sync
     if(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1"){
       console.warn("🚫 syncUp blocked: DEV mode");
       return;
@@ -323,8 +365,11 @@ export default function App() {
       ls_set(SK_CTOF,ct);
     },0);
     if(sync){
-      isDirty.current=true;
-      localStorage.setItem("rt10_dirty","1"); // บันทึกค้างไว้ข้ามการเปิดแอป
+      // ชั้น 2: ถ้า Read-Only ไม่ set isDirty และไม่ sync
+      if(localStorage.getItem("rt10_readonly")!=="1"){
+        isDirty.current=true;
+        localStorage.setItem("rt10_dirty","1"); // บันทึกค้างไว้ข้ามการเปิดแอป
+      }
       syncUp(finalData,finalLedger,cs,ct,rcpt);
     }
   },[data,ledger,costs,ctof,rcpt,syncUp]);
@@ -339,8 +384,10 @@ export default function App() {
       }
       const updated={...prev,orders};
       ls_set_data(updated);
-      isDirty.current=true;
-      localStorage.setItem("rt10_dirty","1");
+      if(localStorage.getItem("rt10_readonly")!=="1"){
+        isDirty.current=true;
+        localStorage.setItem("rt10_dirty","1");
+      }
       syncUp(updated,ledger,costs,ctof,rcpt);
       return updated;
     });
@@ -356,14 +403,16 @@ export default function App() {
         return base;
       })};
       ls_set_data(updated); // เขียน localStorage แค่ 60 วัน
-      isDirty.current=true;
-      localStorage.setItem("rt10_dirty","1");
+      if(localStorage.getItem("rt10_readonly")!=="1"){
+        isDirty.current=true;
+        localStorage.setItem("rt10_dirty","1");
+      }
       syncUp(updated,ledger,costs,ctof,rcpt);
       return updated;
     });
   },[ledger,costs,ctof,rcpt,syncUp]);
 
-  const persistRcpt=r=>{ isDirty.current=true; localStorage.setItem("rt10_dirty","1"); setRcptSt(r); ls_set(SK_RCPT,r); };
+  const persistRcpt=r=>{ if(localStorage.getItem("rt10_readonly")!=="1"){ isDirty.current=true; localStorage.setItem("rt10_dirty","1"); } setRcptSt(r); ls_set(SK_RCPT,r); };
 
   const handleRestore=async()=>{
     setIsRestoring(true);
@@ -529,7 +578,7 @@ export default function App() {
       <div style={{background:"#2C1810",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,zIndex:100,minHeight:64,position:"sticky",top:0,width:"100%",boxSizing:"border-box"}}>
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
-        <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger}/>
+        <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger} isReadOnly={isReadOnly}/>
         {(()=>{
           if(!data.orders||data.orders.length===0) return null;
           const sorted=[...data.orders].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
@@ -539,13 +588,14 @@ export default function App() {
           const color=days>=396?"#C96C6C":"#C87941";
           return <span style={{fontSize:11,color,fontWeight:700,letterSpacing:"0.03em"}}>({days}/400)</span>;
         })()}
+
         <div style={{flex:1}}/>
         <DatePill dispDate={dispDate} badge={badge} onChangeRequest={requestDateChange}/>
         {badge&&<button onClick={()=>{setDD(todayStr());setNN(peekOrderNum(data.orders,todayStr()));}} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.2)",color:"#C8A882",borderRadius:20,padding:"7px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><RotateCcw size={13}/> รีเซ็ต</button>}
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.5</span>
       </div>
 
       {/* VIEWS */}
@@ -553,7 +603,7 @@ export default function App() {
       {view==="manage"  && <ManageView data={data} persist={(nd,s)=>persist(nd,null,null,null,s)}/>}
       {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={handleUpdatePayment} onAdjustment={handleAdjustment}/>}
       {view==="ledger"  && <LedgerView ledger={ledger} cash={cash} data={data} dispDate={dispDate} onUndoEntry={undoLedger} onAddCashTx={addCashTx}/>}
-      {view==="rcptset" && <ReceiptSettingsView settings={rcpt} onSave={persistRcpt} onClearData={clearData}/>}
+      {view==="rcptset" && <ReceiptSettingsView settings={rcpt} onSave={persistRcpt} onClearData={clearData} isReadOnly={isReadOnly} onToggleReadOnly={toggleReadOnly}/>}
 
       {/* MODALS */}
       {modal?.type==="order"&&<Overlay onClose={()=>setModal(null)} wide><OrderModal product={modal.product} linked={getLinked(modal.product)} onConfirm={(v,ao,fr,dis)=>{addToCart(modal.product,v,ao,fr,dis);setModal(null);}}/></Overlay>}
@@ -579,6 +629,8 @@ export default function App() {
             </button>
             <button onClick={()=>{
               // force upload ข้อมูลในเครื่องโดย bypass dirty flag
+              // ป้องกัน Read-Only mode — ไม่อนุญาตให้ push ขึ้น Supabase
+              if(localStorage.getItem("rt10_readonly")==="1"){ setModal(null); return; }
               setSyncSt(s=>({...s,status:"syncing"}));
               sbUpsert({data,ledger:ledger.slice(-MAX_ORDERS),costs,ctof,rcpt})
                 .then(ts=>{ const t=ts||new Date().toISOString(); setSyncSt({status:"synced",lastSynced:t}); ls_set(SK_SYNC,{lastSynced:t}); })
@@ -598,10 +650,12 @@ export default function App() {
 }
 
 // ── SyncIndicator ──
-function SyncIndicator({syncSt,onRestore,orders,ledger}){
+function SyncIndicator({syncSt,onRestore,orders,ledger,isReadOnly}){
   const [open,setOpen]=useState(false);
   const isDev=window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1";
-  const c=isDev
+  const c=isReadOnly
+    ? {color:"#C8A841",label:"Read Only"}
+    : isDev
     ? {color:"#7941C8",label:"DEV MODE"}
     : ({synced:{color:"#6CC97A",label:"Synced"},syncing:{color:"#C8A841",label:"Syncing..."},offline:{color:"#C96C6C",label:"Offline"},error:{color:"#C96C6C",label:"Error"}}[syncSt.status]||{color:"#C8A882",label:""});
 
@@ -2165,7 +2219,7 @@ function WithdrawalModal({onSave,onClose}){
 // ══════════════════════════════════════════════════
 // RECEIPT SETTINGS
 // ══════════════════════════════════════════════════
-function ReceiptSettingsView({settings,onSave,onClearData}){
+function ReceiptSettingsView({settings,onSave,onClearData,isReadOnly,onToggleReadOnly}){
   const [form,setForm]=useState({...DEF_RCPT,...settings});
   const [saved,setSaved]=useState(false);
   const [showClear,setShowClear]=useState(false);
@@ -2355,6 +2409,20 @@ function ReceiptSettingsView({settings,onSave,onClearData}){
                 <button onClick={handleClear} style={{flex:1,background:"#C84B4B",color:"#FFF",border:"none",borderRadius:9,padding:"9px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>ยืนยัน</button>
               </div>
             </div>}
+        </div>
+
+        {/* ── โหมดทดสอบระบบ ── */}
+        <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginTop:16}}>
+          <div style={{fontWeight:600,fontSize:13,color:"#C87941",marginBottom:4}}>โหมดทดสอบระบบ</div>
+          <div style={{fontSize:12,color:"#8C7C6C",marginBottom:12,lineHeight:1.6}}>
+            เปิดเพื่อทดสอบระบบโดยไม่บันทึกการเปลี่ยนแปลงขึ้น Supabase<br/>
+            เหมาะสำหรับทดสอบโค้ดใหม่ — ปิดแอปแล้วโหมดนี้จะหายอัตโนมัติ
+          </div>
+          <button onClick={onToggleReadOnly}
+            style={{background:isReadOnly?"#C87941":"#F5F0EA",color:isReadOnly?"#FFF":"#5C4A36",border:`1px solid ${isReadOnly?"#C87941":"#D4C4B0"}`,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
+            {isReadOnly?"🔒 โหมดทดสอบระบบ — กดเพื่อปิด":"🔓 เปิดโหมดทดสอบระบบ"}
+          </button>
+          {isReadOnly&&<div style={{fontSize:11,color:"#C87941",marginTop:8}}>⚠️ ข้อมูลที่แก้ไขจะไม่ถูกบันทึกลง Supabase</div>}
         </div>
       </div>
 
@@ -2584,4 +2652,3 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
-
