@@ -1925,7 +1925,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         </div>
         {/* แยกยอด เงินสด / โยกเงิน / โอนจ่าย — แถวเดียว */}
         {(()=>{
-          const shift=from===to&&locked.cost>0?cashRev-locked.cost:null;
+          const shift=from===to&&locked.profit>0?cashRev-locked.profit:null;
           const GREEN="#6CC97A", BLUE="#79B8F5";
           const shiftColor=shift===null||shift===0?"transparent":shift>0?GREEN:BLUE;
           const shiftLabel=shift===null?"":shift===0?"✅":shift>0?`฿${Math.abs(shift).toLocaleString()} →`:`← ฿${Math.abs(shift).toLocaleString()}`;
