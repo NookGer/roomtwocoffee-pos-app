@@ -602,7 +602,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.8</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.7.1</span>
       </div>
 
       {/* VIEWS */}
@@ -1861,11 +1861,14 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
   // split order: นับ splitCash → cashRev, splitQR → qrRev
   const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to&&!o.committed);
-  // adjustment.total = cashAdj + qrAdj รวมเป็น 1 ออเดอร์เหมือนกัน
+  // adjAll รวมทุก adjustment (committed หรือไม่) สำหรับ dashRev และ cashRev/qrRev
+  const adjAll=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
+  // adjTotal เฉพาะที่ยังไม่ committed สำหรับส่วนคำนวณกำไร
   const adjTotal=adjToday.reduce((s,o)=>s+(o.total||0),0);
-  dashRev+=adjTotal;
-  const cashAdj=adjToday.reduce((s,o)=>s+(o.cashAdj||0),0);
-  const qrAdj=adjToday.reduce((s,o)=>s+(o.qrAdj||0),0);
+  // dashRev รวมทุก adjustment เพื่อให้ยอดขายรวมตรงกับเงินจริงเสมอ
+  dashRev+=adjAll.reduce((s,o)=>s+(o.total||0),0);
+  const cashAdj=adjAll.reduce((s,o)=>s+(o.cashAdj||0),0);
+  const qrAdj=adjAll.reduce((s,o)=>s+(o.qrAdj||0),0);
   const cashRev=todayOrders.reduce((s,o)=>{
     if(o.paymentMethod==="split") return s+(o.splitCash||0);
     if(o.paymentMethod==="qr") return s;
@@ -1889,6 +1892,9 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
     if(co&&new Date(o.ts)<=new Date(co))return;
     pendRev+=item.price*item.qty; pendUnits+=item.qty;
   }));
+  // รวม adjTotal ที่ยังไม่ committed เข้า pendRev
+  const pendAdjTotal=data.orders.filter(o=>o.type==="adjustment"&&o.date===today&&!o.committed).reduce((s,o)=>s+(o.total||0),0);
+  pendRev+=pendAdjTotal;
 
   const activeOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   const catStats={};
@@ -2121,8 +2127,8 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
       {confModal?.type==="adjustment"&&<AdjustmentModal
         existing={confModal.existing}
         dispDate={dispDate}
-        cashRev={cashRev-(adjToday.reduce((s,o)=>s+(o.cashAdj||0),0))}
-        qrRev={qrRev-(adjToday.reduce((s,o)=>s+(o.qrAdj||0),0))}
+        cashRev={cashRev-(adjAll.reduce((s,o)=>s+(o.cashAdj||0),0))}
+        qrRev={qrRev-(adjAll.reduce((s,o)=>s+(o.qrAdj||0),0))}
         onSave={(cashAdj,qrAdj)=>{onAdjustment({cashAdj,qrAdj},dispDate);setConf(null);}}
         onCancel={()=>setConf(null)}
       />}
