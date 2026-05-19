@@ -544,7 +544,12 @@ export default function App() {
     const nl=ledger.filter(x=>x.id!==id);
     const nc={...ctof};
     if(e.type==="category")(e.catIds||(e.catId?[e.catId]:[])).forEach(cid=>delete nc[cid]);
-    persist(null,nl,null,nc,true);
+    // ถ้า entry มี adjDiff → ลบ adjustment order ของวันนั้นออกด้วย
+    // เพื่อให้แม่ค้าปรับยอดและบันทึกใหม่ได้โดยไม่บวกซ้ำ
+    const nd=(e.adjDiff!==undefined&&e.adjDiff!==0)
+      ?{...data,orders:data.orders.filter(o=>!(o.type==="adjustment"&&o.date===e.date))}
+      :null;
+    persist(nd,nl,null,nc,true);
   }
   function addCashTx(entry){ persist(null,[...ledger,{...entry,id:uid(),ts:new Date().toISOString()}].slice(-MAX_ORDERS),null,null,true); }
   function clearData(){ persist({...data,orders:[]},ledger.filter(e=>e.type==="initial"),costs,{},true); }
@@ -593,7 +598,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.2</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.3</span>
       </div>
 
       {/* VIEWS */}
