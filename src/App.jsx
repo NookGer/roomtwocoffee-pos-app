@@ -1895,7 +1895,8 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const allChecked=selCats.length===0||selCats.length===sc.length;
   const cids=selCats.length===0?sc.map(c=>c.id):selCats;
   const selList=Object.values(catStats).filter(s=>cids.includes(s.cat.id));
-  const selRev=selList.reduce((a,s)=>a+s.rev,0);
+  // บวก adjDiff เข้า selRev เฉพาะตอนเลือกทุกหมวด (adjDiff ไม่สังกัดหมวดใด)
+  const selRev=selList.reduce((a,s)=>a+s.rev,0)+(allChecked?adjDiff:0);
   const selUnits=selList.reduce((a,s)=>a+s.units,0);
   const selUnitName=selList.length===1?selList[0].unitName:"รายการ";
   const cpu=parseFloat(consolCost)||0;
