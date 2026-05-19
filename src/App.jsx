@@ -148,7 +148,7 @@ const PALETTE=[
   "#F4A7E4","#A7E4F4","#D4F4A7","#F4D4A7","#A7F4D4","#F4A7D4",
 ];
 const MAX_ORDERS=40000;
-function todayStr(){ return new Date().toISOString().split("T")[0]; }
+function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function fmtDate(s){ return new Date(s+"T00:00:00").toLocaleDateString("th-TH",{weekday:"short",day:"numeric",month:"short",year:"numeric"}); }
 function fmtDateS(s){ return new Date(s+"T00:00:00").toLocaleDateString("th-TH",{day:"numeric",month:"short"}); }
 function fmtTime(s){ return new Date(s).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}); }
@@ -606,7 +606,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.7.8</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.7.9</span>
       </div>
 
       {/* VIEWS */}
