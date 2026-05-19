@@ -545,7 +545,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.8</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.9</span>
       </div>
 
       {/* VIEWS */}
@@ -1038,7 +1038,11 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   const save=()=>{
     if(!catName.trim()) return;
     if(initCat){
-      persist({...data,categories:data.categories.map(c=>c.id===initCat.id?{...c,name:catName.trim(),color,textColor,presets,items:undefined}:c)},null,null,null,true);
+      persist({...data,categories:data.categories.map(c=>{
+        if(c.id!==initCat.id) return c;
+        const {items:_removed,...rest}=c; // ลบ items เดิมออก
+        return {...rest,name:catName.trim(),color,textColor,presets};
+      })},null,null,null,true);
     } else {
       persist({...data,categories:[...data.categories,{id:`cat${uid()}`,name:catName.trim(),type:"quickorder",color,textColor,order:data.categories.length,presets}]},null,null,null,true);
     }
