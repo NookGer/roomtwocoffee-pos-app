@@ -1895,8 +1895,9 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const allChecked=selCats.length===0||selCats.length===sc.length;
   const cids=selCats.length===0?sc.map(c=>c.id):selCats;
   const selList=Object.values(catStats).filter(s=>cids.includes(s.cat.id));
-  // บวก adjDiff เข้า selRev เฉพาะตอนเลือกทุกหมวด (adjDiff ไม่สังกัดหมวดใด)
-  const selRev=selList.reduce((a,s)=>a+s.rev,0)+(allChecked?adjDiff:0);
+  const selRevBase=selList.reduce((a,s)=>a+s.rev,0); // ยอดขายจริงจาก orders
+  // adjDiff บวกเข้าเฉพาะตอนเลือกทุกหมวด สำหรับแสดงผลและบันทึก
+  const selRev=selRevBase+(allChecked?adjDiff:0);
   const selUnits=selList.reduce((a,s)=>a+s.units,0);
   const selUnitName=selList.length===1?selList[0].unitName:"รายการ";
   const cpu=parseFloat(consolCost)||0;
@@ -1905,7 +1906,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const toggleCat=id=>setSel(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
 
   function handleCommit(){
-    const tc=selList.filter(s=>s.rev>0); if(!tc.length||selRev===0)return;
+    const tc=selList.filter(s=>s.rev>0); if(!tc.length||selRevBase===0)return;
     // เตือนถ้าเป็นวันนี้และยังไม่ปรับยอด
     const isToday=from===to&&from===today;
     const hasAdj=data.orders.some(o=>o.type==="adjustment"&&o.date===dispDate);
@@ -2007,7 +2008,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
             <div key={l} style={{background:"#F5F0EA",borderRadius:11,padding:"12px",textAlign:"center"}}><div style={{fontSize:11,color:"#8C7C6C",marginBottom:4}}>{l}</div><div style={{fontSize:20,fontWeight:700,color:c}}>{v}</div></div>
           ))}
         </div>
-        <button onClick={handleCommit} disabled={selRev===0} style={{width:"100%",background:selRev>0?"#2C1810":"#C0B0A0",color:"#FFF",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:selRev>0?"pointer":"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+        <button onClick={handleCommit} disabled={selRevBase===0} style={{width:"100%",background:selRevBase>0?"#2C1810":"#C0B0A0",color:"#FFF",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:selRev>0?"pointer":"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
           <BookOpen size={15}/> บันทึกลงบัญชี (รีเซ็ตยอดที่เลือก)
         </button>
       </div>
