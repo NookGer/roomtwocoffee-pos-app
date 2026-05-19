@@ -1038,9 +1038,9 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   const save=()=>{
     if(!catName.trim()) return;
     if(initCat){
-      persist({...data,categories:data.categories.map(c=>c.id===initCat.id?{...c,name:catName.trim(),color,textColor,presets,items:undefined}:c)},true);
+      persist({...data,categories:data.categories.map(c=>c.id===initCat.id?{...c,name:catName.trim(),color,textColor,presets,items:undefined}:c)},null,null,null,true);
     } else {
-      persist({...data,categories:[...data.categories,{id:`cat${uid()}`,name:catName.trim(),type:"quickorder",color,textColor,order:data.categories.length,presets}]},true);
+      persist({...data,categories:[...data.categories,{id:`cat${uid()}`,name:catName.trim(),type:"quickorder",color,textColor,order:data.categories.length,presets}]},null,null,null,true);
     }
     onClose();
   };
