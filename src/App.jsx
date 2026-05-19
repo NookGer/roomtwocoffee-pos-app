@@ -1792,26 +1792,6 @@ function AdjEntry({orders,dispDate,from,to,onAdjustment}){
   );
 }
 
-function CashShiftBar({cashRev,lockedCost}){
-  // โยก = เงินสด - ทุนที่บันทึกแล้ว
-  // โยก > 0 → เงินสดเกินทุน → โอนเงินสดเข้าบัญชี (สีเขียว →)
-  // โยก < 0 → เงินสดขาดทุน → ดึงโอนจ่ายมา (สีฟ้า ←)
-  // โยก = 0 หรือ ยังไม่บันทึก → แสดง 0
-  const shift=lockedCost===0?0:cashRev-lockedCost;
-  const GREEN="#6CC97A";
-  const BLUE="#79B8F5";
-  const color=shift>0?GREEN:shift<0?BLUE:"rgba(255,255,255,.4)";
-  const label=shift>0?`→ ${baht(Math.abs(shift))}`:shift<0?`← ${baht(Math.abs(shift))}`:shift===0&&lockedCost>0?"✅":"฿0";
-
-  return(
-    <div style={{background:"rgba(255,255,255,.04)",borderRadius:9,padding:"8px 14px",marginTop:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-      <span style={{fontSize:12,color:"#6CC97A",fontWeight:600}}>💵 เงินสด</span>
-      <span style={{fontSize:16,fontWeight:700,color,letterSpacing:"0.04em",flex:1,textAlign:"center"}}>{label}</span>
-      <span style={{fontSize:12,color:"#79B8F5",fontWeight:600}}>โอนจ่าย 📱</span>
-    </div>
-  );
-}
-
 function CatBarChart({orders,products,sc,from,to}){
   const rawOrders=orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   const raw=sc.map(cat=>{
@@ -1943,26 +1923,33 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
             <div key={l} style={{background:"rgba(255,255,255,.07)",borderRadius:10,padding:"12px",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(255,255,255,.6)",marginBottom:4}}>{l}</div><div style={{fontSize:20,fontWeight:700,color:c}}>{v}</div></div>
           ))}
         </div>
-        {/* แยกยอด เงินสด / โอนจ่าย */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:pendRev>0?8:0}}>
-          <div style={{background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>💵 เงินสด</span>
-            <span style={{fontSize:15,fontWeight:700,color:"#6CC97A"}}>{baht(cashRev)}</span>
-          </div>
-          <div style={{background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>📱 โอนจ่าย</span>
-            <span style={{fontSize:15,fontWeight:700,color:"#79B8F5"}}>{baht(qrRev)}</span>
-          </div>
-        </div>
+        {/* แยกยอด เงินสด / โยกเงิน / โอนจ่าย — แถวเดียว */}
+        {(()=>{
+          const shift=from===to&&locked.cost>0?cashRev-locked.cost:null;
+          const GREEN="#6CC97A", BLUE="#79B8F5";
+          const shiftColor=shift===null||shift===0?"transparent":shift>0?GREEN:BLUE;
+          const shiftLabel=shift===null?"":shift===0?"✅":shift>0?`฿${Math.abs(shift).toLocaleString()} →`:`← ฿${Math.abs(shift).toLocaleString()}`;
+          const multiDay=from!==to;
+          return(
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:pendRev>0?8:0}}>
+              <div style={{flex:1,background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>💵 เงินสด</span>
+                <span style={{fontSize:15,fontWeight:700,color:GREEN}}>{baht(cashRev)}</span>
+              </div>
+              <div style={{minWidth:80,textAlign:"center",padding:"4px 6px"}}>
+                {multiDay
+                  ?<span style={{fontSize:10,color:"rgba(255,255,255,.25)",textAlign:"center",display:"block"}}>ดูวันเดียวเพื่อโยกเงิน</span>
+                  :<span style={{fontSize:14,fontWeight:700,color:shiftColor,letterSpacing:"0.03em"}}>{shiftLabel}</span>
+                }
+              </div>
+              <div style={{flex:1,background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>📱 โอนจ่าย</span>
+                <span style={{fontSize:15,fontWeight:700,color:BLUE}}>{baht(qrRev)}</span>
+              </div>
+            </div>
+          );
+        })()}
         {pendRev>0&&<div style={{background:"rgba(255,255,255,.06)",borderRadius:9,padding:"7px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"rgba(255,255,255,.5)"}}>⏳ รอบันทึกบัญชี ({pendUnits} รายการ)</span><span style={{fontSize:14,fontWeight:700,color:"#C8A882"}}>{baht(pendRev)}</span></div>}
-        {/* แถบโยกเงิน — แสดงเสมอ แต่ซีดถ้าเลือกหลายวัน */}
-        {from===to
-          ?<CashShiftBar cashRev={cashRev} lockedCost={locked.cost}/>
-          :<div style={{background:"rgba(255,255,255,.03)",borderRadius:9,padding:"8px 14px",marginTop:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,opacity:.4}}>
-            <span style={{fontSize:12,color:"#6CC97A",fontWeight:600}}>💵 เงินสด</span>
-            <span style={{fontSize:11,color:"rgba(255,255,255,.5)",textAlign:"center",flex:1}}>เลือกดูวันเดียวเพื่อคำนวณการโยกเงิน</span>
-            <span style={{fontSize:12,color:"#79B8F5",fontWeight:600}}>โอนจ่าย 📱</span>
-          </div>}
       </div>
 
       {/* ปุ่มปรับยอดประจำวัน */}
