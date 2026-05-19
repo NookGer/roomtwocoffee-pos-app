@@ -475,10 +475,11 @@ export default function App() {
     return Math.max(0, vari.price+plus-minus);
   }
 
-  function addToCart(prod,vari,selAddons=[],selFree=[],selDis=[]){
+  function addToCart(prod,vari,selAddons=[],selFree=[],selDis=[],extraNote=""){
     const key=buildKey(prod.id,vari.id,selAddons,selFree,selDis);
     const price=calcPrice(vari,selAddons,selDis);
-    const note=buildNote(selAddons,selFree,selDis);
+    const baseNote=buildNote(selAddons,selFree,selDis);
+    const note=[baseNote,extraNote].filter(Boolean).join(", ");
     setCart(c=>{
       const ex=c.find(i=>i.key===key);
       if(ex) return c.map(i=>i.key===key?{...i,qty:i.qty+1}:i);
@@ -602,7 +603,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.7.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.7.4</span>
       </div>
 
       {/* VIEWS */}
@@ -777,7 +778,7 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj
                     const disAmt=(m.discountIds||[]).reduce((sd,did)=>{const d=data.discounts?.find(x=>x.id===did);return sd+(d?.amount||0);},0);
                     return s+Math.max(0,(vari?.price||0)+addonsPrice-disAmt);
                   },0);
-                  const tc=activeCatObj?.textColor||"#2C1810";
+                  const tc=qi.textColor||activeCatObj?.textColor||"#2C1810";
                   // แก้ IIFE ใน JSX → ใช้ตัวแปรแทน ป้องกัน Safari crash
                   const firstProd=menus.length===1?data.products.find(p=>p.id===menus[0].productId):null;
                   const firstVari=firstProd?(firstProd.variants.find(v=>v.id===menus[0].variantId)||firstProd.variants[0]):null;
@@ -793,10 +794,11 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj
                           const selAddons=(m.addonIds||[]).map(aid=>{const g=data.addons?.find(a=>a.id===aid);return g?{id:g.id,name:g.name,price:g.price}:null;}).filter(Boolean);
                           const selFree=m.freeOptIds||[];
                           const selDis=(m.discountIds||[]).map(did=>{const d=data.discounts?.find(x=>x.id===did);return d?{id:d.id,name:d.name,amount:d.amount}:null;}).filter(Boolean);
-                          addToCart(prod,vari,selAddons,selFree,selDis);
+                          const menuQty=m.qty||1;
+                          for(let qi=0;qi<menuQty;qi++) addToCart(prod,vari,selAddons,selFree,selDis,m.note||"");
                         });
                       }}
-                      style={{background:activeCatObj?.color||"#FFF5DC",borderRadius:18,minHeight:140,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,gap:6,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.1)",transition:"all .18s",userSelect:"none"}}>
+                      style={{background:qi.color||activeCatObj?.color||"#FFF5DC",borderRadius:18,minHeight:140,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,gap:6,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.1)",transition:"all .18s",userSelect:"none"}}>
                       <span style={{fontSize:11,color:tc,fontWeight:700,letterSpacing:"0.05em",opacity:.7}}>⚡ ด่วน</span>
                       <span style={{fontSize:15,fontWeight:700,color:tc,textAlign:"center",lineHeight:1.4}}>{qi.name}</span>
                       {menus.length>1&&<span style={{fontSize:11,color:tc,opacity:.6}}>{menus.length} เมนู</span>}
@@ -1082,23 +1084,27 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   const [selFree,setSelFree]=useState([]);
   const [selDis,setSelDis]=useState([]);
 
-  const sortedCats=data.categories.filter(c=>c.type!=="quickorder").sort((a,b)=>a.order-b.order);
-  const resetMenuForm=()=>{setSelProd(null);setSelVariIdx(0);setSelAddons([]);setSelFree([]);setSelDis([]);};
+  const sortedCats=useMemo(()=>data.categories.filter(c=>c.type!=="quickorder").sort((a,b)=>a.order-b.order),[data.categories]);
+  const [selNote,setSelNote]=useState("");
+  const [selQty,setSelQty]=useState(1);
+  const resetMenuForm=()=>{setSelProd(null);setSelVariIdx(0);setSelAddons([]);setSelFree([]);setSelDis([]);setSelNote("");setSelQty(1);};
 
-  const openNewPreset=()=>{setEditPreset({});setPresetName("");setMenus([]);setShowAddMenu(false);};
-  const openEditPreset=p=>{setEditPreset(p);setPresetName(p.name);setMenus(p.menus||[]);setShowAddMenu(false);};
+  const [presetColor,setPresetColor]=useState("#F5F0EA");
+  const [presetTC,setPresetTC]=useState("#2C1810");
+  const openNewPreset=()=>{setEditPreset({});setPresetName("");setMenus([]);setPresetColor("#F5F0EA");setPresetTC("#2C1810");setShowAddMenu(false);};
+  const openEditPreset=p=>{setEditPreset(p);setPresetName(p.name);setMenus(p.menus||[]);setPresetColor(p.color||"#F5F0EA");setPresetTC(p.textColor||"#2C1810");setShowAddMenu(false);};
 
   const addMenu=()=>{
     if(!selProd) return;
     const vari=selProd.variants[selVariIdx];
-    setMenus(prev=>[...prev,{id:`qm${uid()}`,productId:selProd.id,variantId:vari?.id,addonIds:selAddons.map(a=>a.id),freeOptIds:selFree,discountIds:selDis.map(d=>d.id)}]);
+    setMenus(prev=>[...prev,{id:`qm${uid()}`,productId:selProd.id,variantId:vari?.id,addonIds:selAddons.map(a=>a.id),freeOptIds:selFree,discountIds:selDis.map(d=>d.id),note:selNote.trim(),qty:selQty||1}]);
     resetMenuForm();setShowAddMenu(false);
   };
   const delMenu=id=>setMenus(prev=>prev.filter(m=>m.id!==id));
 
   const savePreset=()=>{
     if(!presetName.trim()||menus.length===0) return;
-    const p={id:editPreset.id||`qp${uid()}`,name:presetName.trim(),menus};
+    const p={id:editPreset.id||`qp${uid()}`,name:presetName.trim(),menus,color:presetColor,textColor:presetTC};
     if(editPreset.id){setPresets(prev=>prev.map(x=>x.id===editPreset.id?p:x));}
     else{setPresets(prev=>[...prev,p]);}
     setEditPreset(null);
@@ -1119,9 +1125,9 @@ function QuickOrderModal({data,persist,onClose,initCat}){
     onClose();
   };
 
-  const linkedAddons=selProd?(selProd.linkedAddons||[]).map(id=>data.addons?.find(a=>a.id===id)).filter(Boolean):[];
-  const linkedFree=selProd?(selProd.linkedFreeOpts||[]).map(id=>data.freeOpts?.find(f=>f.id===id)).filter(Boolean):[];
-  const linkedDis=selProd?(selProd.linkedDiscounts||[]).map(id=>data.discounts?.find(d=>d.id===id)).filter(Boolean):[];
+  const linkedAddons=useMemo(()=>selProd?(selProd.linkedAddons||[]).map(id=>data.addons?.find(a=>a.id===id)).filter(Boolean):[],[selProd,data.addons]);
+  const linkedFree=useMemo(()=>selProd?(selProd.linkedFreeOpts||[]).map(id=>data.freeOpts?.find(f=>f.id===id)).filter(Boolean):[],[selProd,data.freeOpts]);
+  const linkedDis=useMemo(()=>selProd?(selProd.linkedDiscounts||[]).map(id=>data.discounts?.find(d=>d.id===id)).filter(Boolean):[],[selProd,data.discounts]);
 
   // ── render ฟอร์มเพิ่ม/แก้ preset ──
   if(editPreset!==null) return(
@@ -1133,6 +1139,14 @@ function QuickOrderModal({data,persist,onClose,initCat}){
         <Field label="ชื่อ Preset (แสดงบนการ์ด)">
           <input value={presetName} onChange={e=>setPresetName(e.target.value)} placeholder="เช่น ชุดลูกค้าประจำ" style={iStyle}/>
         </Field>
+        <Field label="สีการ์ด"><ColorPicker value={presetColor} onChange={setPresetColor}/></Field>
+        <Field label="สีตัวอักษร">
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setPresetTC("#FFF")} style={{flex:1,padding:"7px",borderRadius:8,border:`2px solid ${presetTC==="#FFF"?"#2C1810":"#D4C4B0"}`,background:presetTC==="#FFF"?"#2C1810":"#F0E8DC",color:presetTC==="#FFF"?"#FFF":"#5C4A36",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>ขาว</button>
+            <button onClick={()=>setPresetTC("#2C1810")} style={{flex:1,padding:"7px",borderRadius:8,border:`2px solid ${presetTC==="#2C1810"?"#2C1810":"#D4C4B0"}`,background:presetTC==="#2C1810"?"#EDE6DC":"#F0E8DC",color:"#2C1810",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>น้ำตาล</button>
+          </div>
+          <div style={{marginTop:6,background:presetColor,borderRadius:8,padding:"8px",textAlign:"center",fontSize:13,fontWeight:700,color:presetTC}}>⚡ {presetName||"ชื่อ Preset"}</div>
+        </Field>
         {/* รายการเมนูใน preset */}
         <div style={{marginBottom:10}}>
           <div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:6}}>เมนูในชุดนี้ ({menus.length} รายการ)</div>
@@ -1140,14 +1154,14 @@ function QuickOrderModal({data,persist,onClose,initCat}){
             const prod=data.products.find(p=>p.id===m.productId);
             const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
             const price=(vari?.price||0)+(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0);
-            const note=[...(m.addonIds||[]).map(aid=>{const a=data.addons?.find(x=>x.id===aid);return a?.name||"";}),(m.freeOptIds||[]).map(f=>f.optLabel||"").filter(Boolean),(m.discountIds||[]).map(did=>{const d=data.discounts?.find(x=>x.id===did);return d?`-฿${d.amount}`:"";}). filter(Boolean)].flat().filter(Boolean).join(", ");
+            const note=[...(m.addonIds||[]).map(aid=>{const a=data.addons?.find(x=>x.id===aid);return a?.name||"";}),(m.freeOptIds||[]).map(f=>f.optLabel||"").filter(Boolean),(m.discountIds||[]).map(did=>{const d=data.discounts?.find(x=>x.id===did);return d?`-฿${d.amount}`:"";}). filter(Boolean),m.note?[m.note]:[]].flat().filter(Boolean).join(", ");
             return(
               <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:9,padding:"7px 10px",marginBottom:5}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#2C1810"}}>{prod?.name||"?"}{vari?.name?` · ${vari.name}`:""}</div>
+                  <div style={{fontSize:13,fontWeight:600,color:"#2C1810"}}>{(m.qty||1)>1&&<span style={{background:"#C87941",color:"#FFF",borderRadius:5,padding:"1px 5px",fontSize:11,marginRight:4}}>{m.qty}x</span>}{prod?.name||"?"}{vari?.name?` · ${vari.name}`:""}</div>
                   {note&&<div style={{fontSize:11,color:"#9C8C7C"}}>{note}</div>}
                 </div>
-                <span style={{fontSize:12,color:"#C87941",fontWeight:600}}>฿{price}</span>
+                <span style={{fontSize:12,color:"#C87941",fontWeight:600}}>฿{price*(m.qty||1)}</span>
                 <button onClick={()=>delMenu(m.id)} style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ลบ</button>
               </div>
             );
@@ -1196,6 +1210,16 @@ function QuickOrderModal({data,persist,onClose,initCat}){
                 style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${sel?"#C84B4B":"#FCA5A5"}`,background:sel?"#FDE8E8":"#FFF",color:sel?"#C84B4B":"#9C4A4A",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{d.name} -฿{d.amount}</button>;})}
             </div>
           </Field>}
+          {selProd&&<Field label="จำนวน (qty)">
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <button onClick={()=>setSelQty(q=>Math.max(1,q-1))} style={{background:"#F0E8DC",border:"none",borderRadius:7,width:32,height:32,fontSize:16,cursor:"pointer",fontFamily:"inherit"}}>-</button>
+              <span style={{fontWeight:700,fontSize:16,minWidth:24,textAlign:"center"}}>{selQty}</span>
+              <button onClick={()=>setSelQty(q=>q+1)} style={{background:"#F0E8DC",border:"none",borderRadius:7,width:32,height:32,fontSize:16,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+            </div>
+          </Field>}
+          {selProd&&<Field label="โน้ตพิเศษ (ถ้ามี)">
+            <input value={selNote} onChange={e=>setSelNote(e.target.value)} placeholder="เช่น ไม่ใส่น้ำแข็ง, extra shot" style={iStyle}/>
+          </Field>}
           <div style={{display:"flex",gap:8,marginTop:8}}>
             <button onClick={()=>{setShowAddMenu(false);resetMenuForm();}} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:9,padding:"8px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
             <button onClick={addMenu} disabled={!selProd} style={{flex:2,background:selProd?"#2C1810":"#C0B0A0",color:"#FFF",border:"none",borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:selProd?"pointer":"not-allowed",fontFamily:"inherit"}}>+ เพิ่มเมนูนี้</button>
@@ -1232,6 +1256,7 @@ function QuickOrderModal({data,persist,onClose,initCat}){
           {presets.map(p=>(
             <div key={p.id} style={{background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:10,padding:"9px 12px",marginBottom:7}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:p.menus?.length>0?5:0}}>
+                <div style={{width:14,height:14,borderRadius:4,background:p.color||"#F5F0EA",border:"1px solid #D4C4B0",flexShrink:0}}/>
                 <span style={{flex:1,fontSize:13,fontWeight:700,color:"#2C1810"}}>⚡ {p.name}</span>
                 <span style={{fontSize:11,color:"#C87941"}}>{p.menus?.length||0} เมนู</span>
                 <button onClick={()=>openEditPreset(p)} style={{background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>แก้ไข</button>
@@ -2744,4 +2769,3 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
-
