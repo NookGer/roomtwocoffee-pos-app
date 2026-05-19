@@ -598,7 +598,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.3</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.4</span>
       </div>
 
       {/* VIEWS */}
@@ -1998,10 +1998,21 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
                 {ctof[cat.id]&&<span style={{fontSize:10,color:"#B0A898"}}>📌{fmtDT(ctof[cat.id])}</span>}
               </label>
             );})}
+            {/* ส่วนต่างปรับยอด — แสดงเมื่อ allChecked และมี adjDiff */}
+            {allChecked&&adjDiff!==0&&(
+              <div style={{display:"flex",alignItems:"center",gap:5,fontSize:13}}>
+                <span style={{background:adjDiff>0?"#166534":"#C84B4B",color:"#FFF",borderRadius:10,padding:"2px 10px",fontSize:12,fontWeight:600}}>
+                  ส่วนต่างปรับยอด
+                </span>
+                <span style={{fontSize:11,color:adjDiff>0?"#166534":"#C84B4B",fontWeight:700}}>
+                  {adjDiff>0?"+":""}{adjDiff.toLocaleString()} บาท
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div style={{background:"#F5F0EA",borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          <span style={{fontSize:13,color:"#2C1810",fontWeight:600}}>รวม {selUnits} {selUnitName} — {baht(selRev)}</span>
+          <span style={{fontSize:13,color:"#2C1810",fontWeight:600}}>รวม {selUnits} {selUnitName}{allChecked&&adjDiff!==0?<span style={{color:adjDiff>0?"#166534":"#C84B4B",fontSize:12}}> {adjDiff>0?"+":""}{adjDiff.toLocaleString()}</span>:""} — {baht(selRev)}</span>
           <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
             <span style={{fontSize:13,color:"#5C4A36"}}>ต้นทุน/หน่วย (฿)</span>
             <input type="number" value={consolCost} onChange={e=>setConsol(e.target.value)} placeholder="0" style={{width:90,padding:"5px 10px",borderRadius:8,border:"1px solid #D4C4B0",background:"#FFF",color:"#2C1810",fontSize:14,fontFamily:"inherit"}}/>
