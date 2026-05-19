@@ -714,6 +714,10 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCat,se
                     return s+(vari?.price||0)+addonsPrice;
                   },0);
                   const tc=activeCatObj?.textColor||"#2C1810";
+                  // แก้ IIFE ใน JSX → ใช้ตัวแปรแทน ป้องกัน Safari crash
+                  const firstProd=menus.length===1?data.products.find(p=>p.id===menus[0].productId):null;
+                  const firstVari=firstProd?(firstProd.variants.find(v=>v.id===menus[0].variantId)||firstProd.variants[0]):null;
+                  const subLabel=firstProd?`${firstProd.name}${firstVari?.name?` · ${firstVari.name}`:""}`:null;
                   return(
                     <div key={qi.id}
                       onClick={()=>{
@@ -731,7 +735,7 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCat,se
                       <span style={{fontSize:11,color:tc,fontWeight:700,letterSpacing:"0.05em",opacity:.7}}>⚡ ด่วน</span>
                       <span style={{fontSize:15,fontWeight:700,color:tc,textAlign:"center",lineHeight:1.4}}>{qi.name}</span>
                       {menus.length>1&&<span style={{fontSize:11,color:tc,opacity:.6}}>{menus.length} เมนู</span>}
-                      {menus.length===1&&(()=>{const prod=data.products.find(p=>p.id===menus[0].productId);const vari=prod?.variants.find(v=>v.id===menus[0].variantId)||prod?.variants[0];return<span style={{fontSize:12,color:tc,opacity:.7,textAlign:"center"}}>{prod?.name}{vari?.name?` · ${vari.name}`:""}</span>;})()}
+                      {subLabel&&<span style={{fontSize:12,color:tc,opacity:.7,textAlign:"center"}}>{subLabel}</span>}
                       <span style={{fontSize:15,fontWeight:700,color:tc}}>฿{totalPrice}</span>
                     </div>
                   );
