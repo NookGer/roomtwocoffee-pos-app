@@ -545,7 +545,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.0</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.1</span>
       </div>
 
       {/* VIEWS */}
@@ -713,7 +713,8 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj
                     const prod=data.products.find(p=>p.id===m.productId);
                     const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
                     const addonsPrice=(m.addonIds||[]).reduce((sa,aid)=>{const a=data.addons?.find(x=>x.id===aid);return sa+(a?.price||0);},0);
-                    return s+(vari?.price||0)+addonsPrice;
+                    const disAmt=(m.discountIds||[]).reduce((sd,did)=>{const d=data.discounts?.find(x=>x.id===did);return sd+(d?.amount||0);},0);
+                    return s+Math.max(0,(vari?.price||0)+addonsPrice-disAmt);
                   },0);
                   const tc=activeCatObj?.textColor||"#2C1810";
                   // แก้ IIFE ใน JSX → ใช้ตัวแปรแทน ป้องกัน Safari crash
@@ -730,7 +731,8 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj
                           if(!vari) return;
                           const selAddons=(m.addonIds||[]).map(aid=>{const g=data.addons?.find(a=>a.id===aid);return g?{id:g.id,name:g.name,price:g.price}:null;}).filter(Boolean);
                           const selFree=m.freeOptIds||[];
-                          addToCart(prod,vari,selAddons,selFree,[]);
+                          const selDis=(m.discountIds||[]).map(did=>{const d=data.discounts?.find(x=>x.id===did);return d?{id:d.id,name:d.name,amount:d.amount}:null;}).filter(Boolean);
+                          addToCart(prod,vari,selAddons,selFree,selDis);
                         });
                       }}
                       style={{background:activeCatObj?.color||"#FFF5DC",borderRadius:18,minHeight:140,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,gap:6,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.1)",transition:"all .18s",userSelect:"none"}}>
@@ -1017,9 +1019,10 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   const [selVariIdx,setSelVariIdx]=useState(0);
   const [selAddons,setSelAddons]=useState([]);
   const [selFree,setSelFree]=useState([]);
+  const [selDis,setSelDis]=useState([]);
 
   const sortedCats=data.categories.filter(c=>c.type!=="quickorder").sort((a,b)=>a.order-b.order);
-  const resetMenuForm=()=>{setSelProd(null);setSelVariIdx(0);setSelAddons([]);setSelFree([]);};
+  const resetMenuForm=()=>{setSelProd(null);setSelVariIdx(0);setSelAddons([]);setSelFree([]);setSelDis([]);};
 
   const openNewPreset=()=>{setEditPreset({});setPresetName("");setMenus([]);setShowAddMenu(false);};
   const openEditPreset=p=>{setEditPreset(p);setPresetName(p.name);setMenus(p.menus||[]);setShowAddMenu(false);};
@@ -1027,7 +1030,7 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   const addMenu=()=>{
     if(!selProd) return;
     const vari=selProd.variants[selVariIdx];
-    setMenus(prev=>[...prev,{id:`qm${uid()}`,productId:selProd.id,variantId:vari?.id,addonIds:selAddons.map(a=>a.id),freeOptIds:selFree}]);
+    setMenus(prev=>[...prev,{id:`qm${uid()}`,productId:selProd.id,variantId:vari?.id,addonIds:selAddons.map(a=>a.id),freeOptIds:selFree,discountIds:selDis.map(d=>d.id)}]);
     resetMenuForm();setShowAddMenu(false);
   };
   const delMenu=id=>setMenus(prev=>prev.filter(m=>m.id!==id));
@@ -1057,6 +1060,7 @@ function QuickOrderModal({data,persist,onClose,initCat}){
 
   const linkedAddons=selProd?(selProd.linkedAddons||[]).map(id=>data.addons?.find(a=>a.id===id)).filter(Boolean):[];
   const linkedFree=selProd?(selProd.linkedFreeOpts||[]).map(id=>data.freeOpts?.find(f=>f.id===id)).filter(Boolean):[];
+  const linkedDis=selProd?(selProd.linkedDiscounts||[]).map(id=>data.discounts?.find(d=>d.id===id)).filter(Boolean):[];
 
   // ── render ฟอร์มเพิ่ม/แก้ preset ──
   if(editPreset!==null) return(
@@ -1075,7 +1079,7 @@ function QuickOrderModal({data,persist,onClose,initCat}){
             const prod=data.products.find(p=>p.id===m.productId);
             const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
             const price=(vari?.price||0)+(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0);
-            const note=[...(m.addonIds||[]).map(aid=>{const a=data.addons?.find(x=>x.id===aid);return a?.name||"";}),(m.freeOptIds||[]).map(f=>f.optLabel||"").filter(Boolean)].flat().filter(Boolean).join(", ");
+            const note=[...(m.addonIds||[]).map(aid=>{const a=data.addons?.find(x=>x.id===aid);return a?.name||"";}),(m.freeOptIds||[]).map(f=>f.optLabel||"").filter(Boolean),(m.discountIds||[]).map(did=>{const d=data.discounts?.find(x=>x.id===did);return d?`-฿${d.amount}`:"";}). filter(Boolean)].flat().filter(Boolean).join(", ");
             return(
               <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:9,padding:"7px 10px",marginBottom:5}}>
                 <div style={{flex:1}}>
@@ -1123,6 +1127,12 @@ function QuickOrderModal({data,persist,onClose,initCat}){
             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
               {linkedAddons.map(a=>{const sel=selAddons.find(x=>x.id===a.id);return<button key={a.id} onClick={()=>setSelAddons(prev=>sel?prev.filter(x=>x.id!==a.id):[...prev,{id:a.id,name:a.name,price:a.price}])}
                 style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${sel?"#C87941":"#D4C4B0"}`,background:sel?"#FFF5DC":"#FFF",color:sel?"#C87941":"#5C4A36",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{a.name} +฿{a.price}</button>;})}
+            </div>
+          </Field>}
+          {selProd&&linkedDis.length>0&&<Field label="ส่วนลด">
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {linkedDis.map(d=>{const sel=selDis.find(x=>x.id===d.id);return<button key={d.id} onClick={()=>setSelDis(prev=>sel?prev.filter(x=>x.id!==d.id):[...prev,{id:d.id,name:d.name,amount:d.amount}])}
+                style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${sel?"#C84B4B":"#FCA5A5"}`,background:sel?"#FDE8E8":"#FFF",color:sel?"#C84B4B":"#9C4A4A",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{d.name} -฿{d.amount}</button>;})}
             </div>
           </Field>}
           <div style={{display:"flex",gap:8,marginTop:8}}>
