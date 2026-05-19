@@ -593,7 +593,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.9</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.0</span>
       </div>
 
       {/* VIEWS */}
@@ -1792,6 +1792,26 @@ function AdjEntry({orders,dispDate,from,to,onAdjustment}){
   );
 }
 
+function CashShiftBar({cashRev,lockedCost}){
+  // โยก = เงินสด - ทุนที่บันทึกแล้ว
+  // โยก > 0 → เงินสดเกินทุน → โอนเงินสดเข้าบัญชี (สีเขียว →)
+  // โยก < 0 → เงินสดขาดทุน → ดึงโอนจ่ายมา (สีฟ้า ←)
+  // โยก = 0 หรือ ยังไม่บันทึก → แสดง 0
+  const shift=lockedCost===0?0:cashRev-lockedCost;
+  const GREEN="#6CC97A";
+  const BLUE="#79B8F5";
+  const color=shift>0?GREEN:shift<0?BLUE:"rgba(255,255,255,.4)";
+  const label=shift>0?`→ ${baht(Math.abs(shift))}`:shift<0?`← ${baht(Math.abs(shift))}`:shift===0&&lockedCost>0?"✅":"฿0";
+
+  return(
+    <div style={{background:"rgba(255,255,255,.04)",borderRadius:9,padding:"8px 14px",marginTop:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+      <span style={{fontSize:12,color:"#6CC97A",fontWeight:600}}>💵 เงินสด</span>
+      <span style={{fontSize:16,fontWeight:700,color,letterSpacing:"0.04em",flex:1,textAlign:"center"}}>{label}</span>
+      <span style={{fontSize:12,color:"#79B8F5",fontWeight:600}}>โอนจ่าย 📱</span>
+    </div>
+  );
+}
+
 function CatBarChart({orders,products,sc,from,to}){
   const rawOrders=orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   const raw=sc.map(cat=>{
@@ -1935,10 +1955,18 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
           </div>
         </div>
         {pendRev>0&&<div style={{background:"rgba(255,255,255,.06)",borderRadius:9,padding:"7px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"rgba(255,255,255,.5)"}}>⏳ รอบันทึกบัญชี ({pendUnits} รายการ)</span><span style={{fontSize:14,fontWeight:700,color:"#C8A882"}}>{baht(pendRev)}</span></div>}
+        {/* แถบโยกเงิน — แสดงเสมอ แต่ซีดถ้าเลือกหลายวัน */}
+        {from===to
+          ?<CashShiftBar cashRev={cashRev} lockedCost={locked.cost}/>
+          :<div style={{background:"rgba(255,255,255,.03)",borderRadius:9,padding:"8px 14px",marginTop:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,opacity:.4}}>
+            <span style={{fontSize:12,color:"#6CC97A",fontWeight:600}}>💵 เงินสด</span>
+            <span style={{fontSize:11,color:"rgba(255,255,255,.5)",textAlign:"center",flex:1}}>เลือกดูวันเดียวเพื่อคำนวณการโยกเงิน</span>
+            <span style={{fontSize:12,color:"#79B8F5",fontWeight:600}}>โอนจ่าย 📱</span>
+          </div>}
       </div>
 
       {/* ปุ่มปรับยอดประจำวัน */}
-      {from===to&&from===dispDate&&<AdjBtn dispDate={dispDate} orders={data.orders} onOpen={adj=>setConf({type:"adjustment",existing:adj})}/>}
+      {from===to&&from===dispDate&&dispDate===today&&<AdjBtn dispDate={dispDate} orders={data.orders} onOpen={adj=>setConf({type:"adjustment",existing:adj})}/>}
       {/* Calc Area */}
       <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
         <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
