@@ -537,7 +537,12 @@ export default function App() {
   // ── Ledger ──
   function addLedgerEntry(entry,ctofPatch){
     const nl=[...ledger,{...entry,id:uid(),ts:new Date().toISOString()}].slice(-MAX_ORDERS);
-    persist(null,nl,null,ctofPatch?{...ctof,...ctofPatch}:ctof,true);
+    // ถ้า entry มี adjDiff → ลบ adjustment order ออกจาก data หลังบันทึกสำเร็จ
+    // เพื่อไม่ให้ adjDiff ค้างและถูกคำนวณซ้ำ
+    const nd=(entry.adjDiff!==undefined&&entry.adjDiff!==0)
+      ?{...data,orders:data.orders.filter(o=>!(o.type==="adjustment"&&o.date===entry.date))}
+      :null;
+    persist(nd,nl,null,ctofPatch?{...ctof,...ctofPatch}:ctof,true);
   }
   function undoLedger(id){
     const e=ledger.find(x=>x.id===id); if(!e)return;
@@ -598,7 +603,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.4</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.5</span>
       </div>
 
       {/* VIEWS */}
