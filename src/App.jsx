@@ -545,11 +545,11 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.9</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.0</span>
       </div>
 
       {/* VIEWS */}
-      {view==="pos"     && <PosView sortedCats={sortedCats} catProducts={catProducts} quickItems={quickItems} isQuickOrderCat={isQuickOrderCat} activeCat={activeCat} setActive={setActive} cart={cart} cartTotal={cartTotal} cartQty={cartQty} cartDone={cartDone} checkout={checkout} setCart={setCart} setModal={setModal} nextNum={nextNum} data={data} openEditModal={openEditModal} getLinked={getLinked} addToCart={addToCart}/>}
+      {view==="pos"     && <PosView sortedCats={sortedCats} catProducts={catProducts} quickItems={quickItems} isQuickOrderCat={isQuickOrderCat} activeCatObj={activeCatObj} activeCat={activeCat} setActive={setActive} cart={cart} cartTotal={cartTotal} cartQty={cartQty} cartDone={cartDone} checkout={checkout} setCart={setCart} setModal={setModal} nextNum={nextNum} data={data} openEditModal={openEditModal} getLinked={getLinked} addToCart={addToCart}/>}
       {view==="manage"  && <ManageView data={data} persist={(nd,s)=>persist(nd,null,null,null,s)}/>}
       {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={handleUpdatePayment} onAdjustment={handleAdjustment}/>}
       {view==="ledger"  && <LedgerView ledger={ledger} cash={cash} data={data} dispDate={dispDate} onUndoEntry={undoLedger} onAddCashTx={addCashTx}/>}
@@ -684,8 +684,10 @@ function DatePill({dispDate,badge,onChangeRequest}){
 // ══════════════════════════════════════════════════
 // POS VIEW
 // ══════════════════════════════════════════════════
-function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCat,setActive,cart,cartTotal,cartQty,cartDone,checkout,setCart,setModal,nextNum,data,openEditModal,getLinked,addToCart}){
-  const unitLabel=cart.length===0?"":(()=>{const u={};cart.forEach(i=>{const k=i.unit||"รายการ";u[k]=(u[k]||0)+i.qty;});return Object.keys(u).map(k=>`${u[k]} ${k}`).join(", ");})();
+function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj,activeCat,setActive,cart,cartTotal,cartQty,cartDone,checkout,setCart,setModal,nextNum,data,openEditModal,getLinked,addToCart}){
+  // แก้ IIFE → ใช้ function call แทน
+  const buildUnitLabel=()=>{const u={};cart.forEach(i=>{const k=i.unit||"รายการ";u[k]=(u[k]||0)+i.qty;});return Object.keys(u).map(k=>`${u[k]} ${k}`).join(", ");};
+  const unitLabel=cart.length===0?"":buildUnitLabel();
   return (
     <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 64px)"}}>
       {/* Categories — scroll independently */}
