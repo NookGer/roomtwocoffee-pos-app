@@ -593,7 +593,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.7</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.8</span>
       </div>
 
       {/* VIEWS */}
@@ -606,7 +606,7 @@ export default function App() {
       {/* MODALS */}
       {modal?.type==="order"&&<Overlay onClose={()=>setModal(null)} wide><OrderModal product={modal.product} linked={getLinked(modal.product)} onConfirm={(v,ao,fr,dis)=>{addToCart(modal.product,v,ao,fr,dis);setModal(null);}}/></Overlay>}
       {modal?.type==="editCartItem"&&<Overlay onClose={()=>setModal(null)} wide><OrderModal product={modal.product} linked={getLinked(modal.product)} isEditing initV={modal.initV} initAo={modal.initAo} initFree={modal.initFree} initDis={modal.initDis} onConfirm={(v,ao,fr,dis)=>{updateCartItem(modal.oldKey,modal.product,v,ao,fr,dis,modal.oldQty);setModal(null);}}/></Overlay>}
-      {modal?.type==="payment"&&<Overlay onClose={()=>setModal(null)} wide><PaymentModal modal={modal} setModal={setModal} cartTotal={cartTotal} rcpt={rcpt} onConfirm={(rcv)=>confirmPay(cart,cartTotal,"cash",0,0,rcv)} onConfirmQR={()=>confirmPay(cart,cartTotal,"qr")} onConfirmSplit={(sc,sq)=>confirmPay(cart,cartTotal,"split",sc,sq)}/></Overlay>}
+      {modal?.type==="payment"&&<Overlay onClose={()=>setModal(null)} wide><PaymentModal modal={modal} setModal={setModal} cartTotal={cartTotal} rcpt={rcpt} onConfirm={(rcv)=>confirmPay(cart,cartTotal,"cash",0,0,rcv)} onConfirmQR={()=>confirmPay(cart,cartTotal,"qr")} onConfirmSplit={(splitC,splitQ)=>confirmPay(cart,cartTotal,"split",splitC,splitQ)}/></Overlay>}
       {modal?.type==="change"&&<Overlay onClose={dismissChange} wide><ChangeModal modal={modal} onDismiss={dismissChange}/></Overlay>}
       {modal?.type==="viewReceipt"&&<Overlay onClose={()=>setModal(null)} wide><ChangeModal modal={modal} onDismiss={()=>setModal(null)}/></Overlay>}
       {modal?.type==="alert"&&<Overlay onClose={()=>setModal(null)}><AlertModal msg={modal.msg} onClose={()=>setModal(null)}/></Overlay>}
