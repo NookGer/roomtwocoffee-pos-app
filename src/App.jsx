@@ -593,7 +593,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.8</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.9</span>
       </div>
 
       {/* VIEWS */}
@@ -1793,7 +1793,7 @@ function AdjEntry({orders,dispDate,from,to,onAdjustment}){
 }
 
 function CatBarChart({orders,products,sc,from,to}){
-  const rawOrders=orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
+  const rawOrders=orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   const raw=sc.map(cat=>{
     let rev=0,units=0,unitName="รายการ";
     rawOrders.forEach(o=>o.items.forEach(item=>{
@@ -1843,7 +1843,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const today=todayStr();
 
   // กรองตาม date range (from/to) ไม่ใช่แค่วันนี้
-  const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
+  const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
   // split order: นับ splitCash → cashRev, splitQR → qrRev
   const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
@@ -1864,7 +1864,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const todayLdgr=ledger.filter(e=>e.type==="category"&&e.ts?.split("T")[0]>=from&&e.ts?.split("T")[0]<=to);
   const locked=todayLdgr.reduce((a,e)=>({cost:a.cost+(e.cost||0),profit:a.profit+(e.netProfit||0)}),{cost:0,profit:0});
 
-  const pendOrders=data.orders.filter(o=>o.date===today&&!o.isCanceled);
+  const pendOrders=data.orders.filter(o=>o.date===today&&!o.isCanceled&&o.type!=="adjustment");
   let pendRev=0,pendUnits=0;
   pendOrders.forEach(o=>o.items.forEach(item=>{
     const p=data.products.find(x=>x.id===item.productId); if(!p)return;
@@ -1873,7 +1873,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
     pendRev+=item.price*item.qty; pendUnits+=item.qty;
   }));
 
-  const activeOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
+  const activeOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   const catStats={};
   sc.forEach(cat=>{
     const cutoff=ctof[cat.id]||null;
