@@ -1849,11 +1849,11 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   // กรองตาม date range (from/to) ไม่ใช่แค่วันนี้
   const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
+  // split order: นับ splitCash → cashRev, splitQR → qrRev
+  const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
   // บวกส่วนต่างการปรับยอดเข้า dashRev เพื่อให้ยอดรวมตรงกับเงินจริง
   const adjDiff=adjToday.reduce((s,o)=>s+(o.cashAdj||0)+(o.qrAdj||0),0);
   dashRev+=adjDiff;
-  // split order: นับ splitCash → cashRev, splitQR → qrRev
-  const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
   const cashAdj=adjToday.reduce((s,o)=>s+(o.cashAdj||0),0);
   const qrAdj=adjToday.reduce((s,o)=>s+(o.qrAdj||0),0);
   const cashRev=todayOrders.reduce((s,o)=>{
