@@ -593,7 +593,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.2</span>
       </div>
 
       {/* VIEWS */}
@@ -1911,15 +1911,15 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
     const isToday=from===to&&from===today;
     const hasAdj=data.orders.some(o=>o.type==="adjustment"&&o.date===dispDate);
     if(isToday&&!hasAdj){
-      setConf({type:"warnNoAdj",onConfirm:()=>{setConf(null);setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName});}});
+      setConf({type:"warnNoAdj",onConfirm:()=>{setConf(null);setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName,adjDiff:allChecked?adjDiff:0});}});
       return;
     }
-    setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName});
+    setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName,adjDiff:allChecked?adjDiff:0});
   }
   function doCommit(){
     if(!commitConfirm)return;
     const ts=new Date().toISOString(); const catIds=commitConfirm.items.map(s=>s.cat.id);
-    const entry={type:"category",catIds,catName:commitConfirm.items.map(s=>s.cat.name).join(", "),date:dispDate,units:commitConfirm.totalUnits,unitName:commitConfirm.unitName||"รายการ",revenue:commitConfirm.totalRev,cost:commitConfirm.totalCost,netProfit:commitConfirm.totalProfit};
+    const entry={type:"category",catIds,catName:commitConfirm.items.map(s=>s.cat.name).join(", "),date:dispDate,units:commitConfirm.totalUnits,unitName:commitConfirm.unitName||"รายการ",revenue:commitConfirm.totalRev,cost:commitConfirm.totalCost,netProfit:commitConfirm.totalProfit,adjDiff:commitConfirm.adjDiff||0};
     const p={}; catIds.forEach(id=>{p[id]=ts;});
     onLedgerCommit(entry,p); setCmtConf(null); setConsol("");
   }
@@ -2117,6 +2117,10 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
             <span style={{fontWeight:600,color:"#5C4A36"}}>{commitConfirm.totalUnits} {commitConfirm.unitName||"รายการ"}</span>
           </div>
           <div style={{borderTop:"1px solid #D4C4B0",marginTop:8,paddingTop:8}}>
+            {commitConfirm.adjDiff!==0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13,marginBottom:6,padding:"5px 8px",background:commitConfirm.adjDiff>0?"#F0FFF4":"#FEF2F2",borderRadius:7}}>
+              <span style={{color:"#8C7C6C"}}>ปรับยอด</span>
+              <span style={{fontWeight:700,color:commitConfirm.adjDiff>0?"#166534":"#C84B4B"}}>{commitConfirm.adjDiff>0?"+":""}{commitConfirm.adjDiff.toLocaleString()} บาท</span>
+            </div>}
             {[
               ["ยอดขายรวม", baht(commitConfirm.totalRev), "#D4A574", null],
               ["ต้นทุนรวม", baht(commitConfirm.totalCost), "#C87941",
@@ -2197,6 +2201,7 @@ function LedgerView({ledger,cash,data,dispDate,onUndoEntry,onAddCashTx}){
                       {[["จำนวน",`${e.units||0} ${e.unitName||"รายการ"}`,"#6B4F3A"],["ยอดขาย",baht(e.revenue),"#D4A574"],["ทุน",`${baht(e.cost)}${e.units>0?` (${Math.round(e.cost/e.units)}฿/${e.unitName||"รายการ"})`:""}`,"#C87941"],["กำไร",baht(e.netProfit),(e.netProfit||0)>=0?"#3A7A3A":"#C84B4B"]].map(([l,v,c])=>(
                         <div key={l} style={{background:"#F5F0EA",borderRadius:7,padding:"5px 8px",textAlign:"center"}}><div style={{fontSize:10,color:"#8C7C6C"}}>{l}</div><div style={{fontSize:13,fontWeight:700,color:c}}>{v}</div></div>
                       ))}
+                      {(e.adjDiff!==undefined&&e.adjDiff!==0)&&<div style={{gridColumn:"1/-1",background:e.adjDiff>0?"#F0FFF4":"#FEF2F2",borderRadius:7,padding:"4px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"#8C7C6C"}}>ปรับยอด</span><span style={{fontSize:12,fontWeight:700,color:e.adjDiff>0?"#166534":"#C84B4B"}}>{e.adjDiff>0?"+":""}{e.adjDiff.toLocaleString()} บาท</span></div>}
                     </div>}
                     {e.type==="initial"&&<div style={{fontSize:13,color:"#4179C8",fontWeight:600}}>ทุน {baht(e.capital)} · กำไร {baht(e.profit)}</div>}
                     {e.type==="expense"&&<div style={{fontSize:13,color:"#C87941",fontWeight:700}}>จ่ายทุน: {baht(e.amount)}{e.desc?<span style={{color:"#8C7C6C",fontWeight:400}}> — {e.desc}</span>:""}</div>}
