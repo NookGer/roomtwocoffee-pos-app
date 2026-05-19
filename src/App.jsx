@@ -538,14 +538,22 @@ export default function App() {
   // ── Ledger ──
   function addLedgerEntry(entry,ctofPatch){
     const nl=[...ledger,{...entry,id:uid(),ts:new Date().toISOString()}].slice(-MAX_ORDERS);
-    persist(null,nl,null,ctofPatch?{...ctof,...ctofPatch}:ctof,true);
+    // ถ้า entry มี adjTotal → mark adjustment order ว่า committed ป้องกันคำนวณซ้ำ
+    const nd=(entry.adjTotal!==undefined&&entry.adjTotal!==0)
+      ?{...data,orders:data.orders.map(o=>o.type==="adjustment"&&o.date===entry.date?{...o,committed:true}:o)}
+      :null;
+    persist(nd,nl,null,ctofPatch?{...ctof,...ctofPatch}:ctof,true);
   }
   function undoLedger(id){
     const e=ledger.find(x=>x.id===id); if(!e)return;
     const nl=ledger.filter(x=>x.id!==id);
     const nc={...ctof};
     if(e.type==="category")(e.catIds||(e.catId?[e.catId]:[])).forEach(cid=>delete nc[cid]);
-    persist(null,nl,null,nc,true);
+    // ถ้า entry มี adjTotal → reset committed=false ให้ adjustment กลับมาคำนวณได้
+    const nd=(e.adjTotal!==undefined&&e.adjTotal!==0)
+      ?{...data,orders:data.orders.map(o=>o.type==="adjustment"&&o.date===e.date?{...o,committed:false}:o)}
+      :null;
+    persist(nd,nl,null,nc,true);
   }
   function addCashTx(entry){ persist(null,[...ledger,{...entry,id:uid(),ts:new Date().toISOString()}].slice(-MAX_ORDERS),null,null,true); }
   function clearData(){ persist({...data,orders:[]},ledger.filter(e=>e.type==="initial"),costs,{},true); }
@@ -594,7 +602,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.6</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.8</span>
       </div>
 
       {/* VIEWS */}
@@ -1791,8 +1799,9 @@ function AdjEntry({orders,dispDate,from,to,onAdjustment}){
           &nbsp;|&nbsp; <span style={{color:diffColor,fontWeight:700}}>ส่วนต่าง {diffLabel}</span>
         </div>
       </div>
-      <button onClick={()=>{if(window.confirm("ยืนยันลบการปรับยอด?")){onAdjustment(null,dispDate);}}}
-        style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:7,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
+      {!adj.committed&&<button onClick={()=>{if(window.confirm("ยืนยันลบการปรับยอด?")){onAdjustment(null,dispDate);}}}
+        style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:7,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>}
+      {adj.committed&&<span style={{fontSize:10,color:"#9C8C7C"}}>บันทึกแล้ว</span>}
     </div>
   );
 }
@@ -1851,7 +1860,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
   // split order: นับ splitCash → cashRev, splitQR → qrRev
-  const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
+  const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to&&!o.committed);
   // adjustment.total = cashAdj + qrAdj รวมเป็น 1 ออเดอร์เหมือนกัน
   const adjTotal=adjToday.reduce((s,o)=>s+(o.total||0),0);
   dashRev+=adjTotal;
