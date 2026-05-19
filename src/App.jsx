@@ -579,14 +579,12 @@ export default function App() {
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
         <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger} isReadOnly={isReadOnly}/>
-        {(()=>{
-          if(!data.orders||data.orders.length===0) return null;
+        {(data.orders&&data.orders.length>0)&&(()=>{
           const sorted=[...data.orders].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
           const oldestDate=sorted[0].date||sorted[0].ts?.split("T")[0]||todayStr();
           const days=Math.floor((new Date()-new Date(oldestDate+"T00:00:00"))/(1000*60*60*24));
-          if(days<390) return null;
           const color=days>=396?"#C96C6C":"#C87941";
-          return <span style={{fontSize:11,color,fontWeight:700,letterSpacing:"0.03em"}}>({days}/400)</span>;
+          return days>=390?<span style={{fontSize:11,color,fontWeight:700,letterSpacing:"0.03em"}}>({days}/400)</span>:null;
         })()}
 
         <div style={{flex:1}}/>
@@ -595,7 +593,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.6</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.5.7</span>
       </div>
 
       {/* VIEWS */}
@@ -1734,6 +1732,108 @@ function EditCatModal({cat,data,persist,onClose}){
 // ══════════════════════════════════════════════════
 // REPORT VIEW
 // ══════════════════════════════════════════════════
+function MonthlyChart({ledger}){
+  const MONTH_NAMES=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  const monthMap={};
+  ledger.filter(e=>e.type==="category"&&e.ts).forEach(e=>{
+    const d=new Date(e.ts);
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    if(!monthMap[key]) monthMap[key]={key,year:d.getFullYear(),month:d.getMonth(),revenue:0,profit:0};
+    monthMap[key].revenue+=(e.revenue||0);
+    monthMap[key].profit+=(e.netProfit||0);
+  });
+  const months=Object.values(monthMap).sort((a,b)=>a.key.localeCompare(b.key)).slice(-13);
+  if(!months.length) return null;
+  const maxRev=Math.max(...months.map(m=>m.revenue),1);
+  const today=new Date();
+  return(
+    <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
+      <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:4}}>📈 ยอดขายรายเดือน</div>
+      <div style={{fontSize:11,color:"#9C8C7C",marginBottom:14}}>ข้อมูลจากบัญชีที่บันทึกแล้ว</div>
+      <div style={{display:"flex",alignItems:"flex-end",gap:6,height:140,overflowX:"auto",paddingBottom:4}}>
+        {months.map(m=>{
+          const barH=Math.max(4,Math.round((m.revenue/maxRev)*120));
+          const isCur=m.year===today.getFullYear()&&m.month===today.getMonth();
+          return(
+            <div key={m.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:38,flex:"1 0 38px"}}>
+              <div style={{fontSize:10,color:"#6B4F3A",fontWeight:700,whiteSpace:"nowrap"}}>{m.revenue>=1000?`${(m.revenue/1000).toFixed(1)}k`:m.revenue}</div>
+              <div style={{width:"100%",background:isCur?"#D4A574":"#6B4F3A",borderRadius:"4px 4px 0 0",height:barH,opacity:isCur?1:0.75,transition:"height .3s ease",position:"relative"}}>
+                {isCur&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:6,height:6,borderRadius:"50%",background:"#D4A574",border:"2px solid #2C1810"}}/>}
+              </div>
+              <div style={{fontSize:10,color:isCur?"#2C1810":"#8C7C6C",fontWeight:isCur?700:400,textAlign:"center",lineHeight:1.3}}>
+                {MONTH_NAMES[m.month]}<br/><span style={{fontSize:9,color:"#B0A090"}}>{m.year+543}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {months.length>0&&<div style={{display:"flex",justifyContent:"space-between",marginTop:10,fontSize:11,color:"#8C7C6C",borderTop:"1px solid #EDE4DA",paddingTop:8}}>
+        <span>สูงสุด: <b style={{color:"#2C1810"}}>{baht(Math.max(...months.map(m=>m.revenue)))}</b></span>
+        <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:"#D4A574"}}/> เดือนปัจจุบัน</span>
+      </div>}
+    </div>
+  );
+}
+
+function AdjEntry({orders,dispDate,from,to,onAdjustment}){
+  const adj=orders.find(o=>o.type==="adjustment"&&o.date===dispDate);
+  if(!adj||from!==to||from!==dispDate) return null;
+  return(
+    <div style={{background:"#FDE8E8",border:"1px solid #FCA5A5",borderRadius:11,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+      <div>
+        <div style={{fontSize:12,fontWeight:700,color:"#C84B4B",marginBottom:3}}>🔧 ปรับยอดประจำวัน</div>
+        <div style={{fontSize:11,color:"#C84B4B"}}>
+          💵 เงินสด {adj.cashAdj>=0?"+":""}{(adj.cashAdj||0).toLocaleString()} บาท &nbsp;|&nbsp; 📱 โอนจ่าย {adj.qrAdj>=0?"+":""}{(adj.qrAdj||0).toLocaleString()} บาท
+        </div>
+      </div>
+      <button onClick={()=>{if(window.confirm("ยืนยันลบการปรับยอด?")){onAdjustment(null,dispDate);}}}
+        style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:7,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
+    </div>
+  );
+}
+
+function CatBarChart({orders,products,sc,from,to}){
+  const rawOrders=orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
+  const raw=sc.map(cat=>{
+    let rev=0,units=0,unitName="รายการ";
+    rawOrders.forEach(o=>o.items.forEach(item=>{
+      const p=products.find(x=>x.id===item.productId);
+      if(!p||p.categoryId!==cat.id)return;
+      rev+=item.price*item.qty;units+=item.qty;if(p.unit)unitName=p.unit;
+    }));
+    return{cat,rev,units,unitName};
+  }).filter(s=>s.rev>0).sort((a,b)=>b.rev-a.rev);
+  const rTot=raw.reduce((a,s)=>a+s.rev,0);
+  if(!raw.length)return null;
+  return(
+    <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
+      <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:12}}>ยอดขายตามหมวดหมู่ <span style={{fontWeight:400,fontSize:12,color:"#8C7C6C"}}>({raw.reduce((a,s)=>a+s.units,0)} {raw.length===1?raw[0].unitName:"หน่วย"})</span></div>
+      {raw.map(s=>(
+        <div key={s.cat.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{width:11,height:11,borderRadius:3,background:s.cat.color,flexShrink:0}}/>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:3}}><span style={{fontWeight:600,color:"#2C1810"}}>{s.cat.name}</span><span style={{color:"#6B4F3A",fontWeight:700}}>{baht(s.rev)}</span></div>
+            <div style={{background:"#EDE6DC",borderRadius:4,height:5}}><div style={{background:s.cat.color,height:"100%",width:`${rTot>0?(s.rev/rTot*100):0}%`,borderRadius:4}}/></div>
+          </div>
+          <span style={{fontSize:12,color:"#8C7C6C",minWidth:56,textAlign:"right"}}>{s.units} {s.unitName}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AdjBtn({dispDate,orders,onOpen}){
+  const adj=orders.find(o=>o.type==="adjustment"&&o.date===dispDate);
+  return(
+    <div style={{marginBottom:12,display:"flex",justifyContent:"flex-end"}}>
+      <button onClick={()=>onOpen(adj)}
+        style={{background:"#C84B4B",color:"#FFF",border:"none",borderRadius:9,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+        🔧 {adj?"แก้ไขการปรับยอด":"ปรับยอดวันนี้"}
+      </button>
+    </div>
+  );
+}
+
 function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLedgerCommit,ctof,ledger,onUpdatePayment,onAdjustment}){
   const [from,setFrom]=useState(dispDate),[to,setTo]=useState(dispDate);
   const [selCats,setSel]=useState([]),[histOpen,setHist]=useState(false);
@@ -1838,17 +1938,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
       </div>
 
       {/* ปุ่มปรับยอดประจำวัน */}
-      {from===to&&from===dispDate&&(()=>{
-        const adj=data.orders.find(o=>o.type==="adjustment"&&o.date===dispDate);
-        return(
-          <div style={{marginBottom:12,display:"flex",justifyContent:"flex-end"}}>
-            <button onClick={()=>setConf({type:"adjustment",existing:adj})}
-              style={{background:"#C84B4B",color:"#FFF",border:"none",borderRadius:9,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
-              🔧 {adj?"แก้ไขการปรับยอด":"ปรับยอดวันนี้"}
-            </button>
-          </div>
-        );
-      })()}
+      {from===to&&from===dispDate&&<AdjBtn dispDate={dispDate} orders={data.orders} onOpen={adj=>setConf({type:"adjustment",existing:adj})}/>}
       {/* Calc Area */}
       <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
         <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
@@ -1892,72 +1982,12 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         </button>
       </div>
 
-      {/* Bar chart — อิสระจาก checkbox: ดึงจาก raw orders ทั้งหมดในช่วงวัน ไม่ filter cutoff */}
-      {(()=>{
-        const rawOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled);
-        const raw=sc.map(cat=>{let rev=0,units=0,unitName="รายการ";rawOrders.forEach(o=>o.items.forEach(item=>{const p=data.products.find(x=>x.id===item.productId);if(!p||p.categoryId!==cat.id)return;rev+=item.price*item.qty;units+=item.qty;if(p.unit)unitName=p.unit;}));return{cat,rev,units,unitName};}).filter(s=>s.rev>0).sort((a,b)=>b.rev-a.rev);
-        const rTot=raw.reduce((a,s)=>a+s.rev,0);
-        if(!raw.length)return null;
-        return(<div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
-          <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:12}}>ยอดขายตามหมวดหมู่ <span style={{fontWeight:400,fontSize:12,color:"#8C7C6C"}}>({raw.reduce((a,s)=>a+s.units,0)} {raw.length===1?raw[0].unitName:"หน่วย"})</span></div>
-          {raw.map(s=>(
-            <div key={s.cat.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-              <div style={{width:11,height:11,borderRadius:3,background:s.cat.color,flexShrink:0}}/>
-              <div style={{flex:1}}>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:3}}><span style={{fontWeight:600,color:"#2C1810"}}>{s.cat.name}</span><span style={{color:"#6B4F3A",fontWeight:700}}>{baht(s.rev)}</span></div>
-                <div style={{background:"#EDE6DC",borderRadius:4,height:5}}><div style={{background:s.cat.color,height:"100%",width:`${rTot>0?(s.rev/rTot*100):0}%`,borderRadius:4}}/></div>
-              </div>
-              <span style={{fontSize:12,color:"#8C7C6C",minWidth:56,textAlign:"right"}}>{s.units} {s.unitName}</span>
-            </div>
-          ))}
-        </div>);
-      })()}
+      {/* Bar chart — อิสระจาก checkbox */}
+      <CatBarChart orders={data.orders} products={data.products} sc={sc} from={from} to={to}/>
 
 
-      {/* กราฟยอดขายรายเดือน — ดึงจาก Ledger */}
-      {(()=>{
-        const MONTH_NAMES=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-        // รวมยอดขายจาก Ledger entries ประเภท category แยกตาม ปี-เดือน
-        const monthMap={};
-        ledger.filter(e=>e.type==="category"&&e.ts).forEach(e=>{
-          const d=new Date(e.ts);
-          const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-          if(!monthMap[key]) monthMap[key]={key,year:d.getFullYear(),month:d.getMonth(),revenue:0,profit:0};
-          monthMap[key].revenue+=(e.revenue||0);
-          monthMap[key].profit+=(e.netProfit||0);
-        });
-        const months=Object.values(monthMap).sort((a,b)=>a.key.localeCompare(b.key)).slice(-13);
-        if(!months.length) return null;
-        const maxRev=Math.max(...months.map(m=>m.revenue),1);
-        const today=new Date();
-        return(
-          <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,padding:18,marginBottom:18}}>
-            <div style={{fontWeight:700,fontSize:14,color:"#2C1810",marginBottom:4}}>📈 ยอดขายรายเดือน</div>
-            <div style={{fontSize:11,color:"#9C8C7C",marginBottom:14}}>ข้อมูลจากบัญชีที่บันทึกแล้ว</div>
-            <div style={{display:"flex",alignItems:"flex-end",gap:6,height:140,overflowX:"auto",paddingBottom:4}}>
-              {months.map(m=>{
-                const barH=Math.max(4,Math.round((m.revenue/maxRev)*120));
-                const isCurrentMonth=m.year===today.getFullYear()&&m.month===today.getMonth();
-                return(
-                  <div key={m.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:38,flex:"1 0 38px"}}>
-                    <div style={{fontSize:10,color:"#6B4F3A",fontWeight:700,whiteSpace:"nowrap"}}>{m.revenue>=1000?`${(m.revenue/1000).toFixed(1)}k`:m.revenue}</div>
-                    <div style={{width:"100%",background:isCurrentMonth?"#D4A574":"#6B4F3A",borderRadius:"4px 4px 0 0",height:barH,opacity:isCurrentMonth?1:0.75,transition:"height .3s ease",position:"relative"}}>
-                      {isCurrentMonth&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:6,height:6,borderRadius:"50%",background:"#D4A574",border:"2px solid #2C1810"}}/>}
-                    </div>
-                    <div style={{fontSize:10,color:isCurrentMonth?"#2C1810":"#8C7C6C",fontWeight:isCurrentMonth?700:400,textAlign:"center",lineHeight:1.3}}>
-                      {MONTH_NAMES[m.month]}<br/><span style={{fontSize:9,color:"#B0A090"}}>{m.year+543}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {months.length>0&&<div style={{display:"flex",justifyContent:"space-between",marginTop:10,fontSize:11,color:"#8C7C6C",borderTop:"1px solid #EDE4DA",paddingTop:8}}>
-              <span>สูงสุด: <b style={{color:"#2C1810"}}>{baht(Math.max(...months.map(m=>m.revenue)))}</b></span>
-              <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:"#D4A574"}}/> เดือนปัจจุบัน</span>
-            </div>}
-          </div>
-        );
-      })()}
+      {/* กราฟยอดขายรายเดือน */}
+      <MonthlyChart ledger={ledger}/>
 
       {/* Order history */}
       <div style={{background:"#FFF8F2",border:"1px solid #E8D8C8",borderRadius:13,overflow:"hidden",marginBottom:18}}>
@@ -1970,22 +2000,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
           {/* จำกัดแสดง 5 รายการ scroll เฉพาะส่วน */}
           <div style={{maxHeight:420,overflowY:"auto",padding:"0 18px"}}>
             {/* adjustment entry */}
-            {(()=>{
-              const adj=data.orders.find(o=>o.type==="adjustment"&&o.date===dispDate);
-              if(!adj||from!==to||from!==dispDate) return null;
-              return(
-                <div style={{background:"#FDE8E8",border:"1px solid #FCA5A5",borderRadius:11,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:"#C84B4B",marginBottom:3}}>🔧 ปรับยอดประจำวัน</div>
-                    <div style={{fontSize:11,color:"#C84B4B"}}>
-                      💵 เงินสด {adj.cashAdj>=0?"+":""}{(adj.cashAdj||0).toLocaleString()} บาท &nbsp;|&nbsp; 📱 โอนจ่าย {adj.qrAdj>=0?"+":""}{(adj.qrAdj||0).toLocaleString()} บาท
-                    </div>
-                  </div>
-                  <button onClick={()=>{if(window.confirm("ยืนยันลบการปรับยอด?")){onAdjustment(null,dispDate);}}}
-                    style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:7,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
-                </div>
-              );
-            })()}
+            <AdjEntry orders={data.orders} dispDate={dispDate} from={from} to={to} onAdjustment={onAdjustment}/>
             {[...allOrders].reverse().map(order=>(
               <div key={order.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #EDE4DA",opacity:order.isCanceled?0.6:1}}>
                 <div style={{width:4,borderRadius:4,alignSelf:"stretch",background:order.isCanceled?"#C84B4B":"#7A9E6B",flexShrink:0,minHeight:36}}/>
