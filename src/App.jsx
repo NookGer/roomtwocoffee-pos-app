@@ -545,7 +545,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.7</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.4.8</span>
       </div>
 
       {/* VIEWS */}
@@ -2546,7 +2546,7 @@ function ChangeModal({modal,onDismiss}){
           </table>
           <Divider type={divMid2} length={divMid2Len}/>
           <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿{order.total?.toLocaleString()}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="split"?"#B45309":order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="split"?"💵📱 แบ่งจ่าย":order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="split"?"#B45309":order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="split"?"แบ่งจ่าย":order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
           {order.paymentMethod==="split"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>📱 โอนจ่าย</span><span style={{color:"#1D4ED8",fontWeight:600}}>฿{(order.splitQR||0).toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>💵 เงินสด</span><span style={{color:"#166534",fontWeight:600}}>฿{(order.splitCash||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
           {order.paymentMethod==="cash"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
           {qrPayload&&order.paymentMethod==="qr"&&<><Divider type={divMid3} length={divMid3Len}/><div style={{textAlign:"center"}}>{accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:14,fontWeight:700,color:"#000",marginBottom:8}}>{accountName}</div></>}<QRCodeCanvas value={qrPayload} size={160} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:20,fontWeight:700,color:"#000",marginTop:6}}>฿{order.total?.toLocaleString()}</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
@@ -2564,3 +2564,4 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
+
