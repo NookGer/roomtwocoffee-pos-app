@@ -593,7 +593,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.0</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.1</span>
       </div>
 
       {/* VIEWS */}
@@ -1778,12 +1778,16 @@ function MonthlyChart({ledger}){
 function AdjEntry({orders,dispDate,from,to,onAdjustment}){
   const adj=orders.find(o=>o.type==="adjustment"&&o.date===dispDate);
   if(!adj||from!==to||from!==dispDate) return null;
+  const diff=(adj.cashAdj||0)+(adj.qrAdj||0);
+  const diffColor=diff>0?"#166534":diff<0?"#C84B4B":"#8C7C6C";
+  const diffLabel=diff>0?`+฿${diff.toLocaleString()}`:diff<0?`-฿${Math.abs(diff).toLocaleString()}`:"฿0";
   return(
     <div style={{background:"#FDE8E8",border:"1px solid #FCA5A5",borderRadius:11,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
       <div>
         <div style={{fontSize:12,fontWeight:700,color:"#C84B4B",marginBottom:3}}>🔧 ปรับยอดประจำวัน</div>
         <div style={{fontSize:11,color:"#C84B4B"}}>
           💵 เงินสด {adj.cashAdj>=0?"+":""}{(adj.cashAdj||0).toLocaleString()} บาท &nbsp;|&nbsp; 📱 โอนจ่าย {adj.qrAdj>=0?"+":""}{(adj.qrAdj||0).toLocaleString()} บาท
+          &nbsp;|&nbsp; <span style={{color:diffColor,fontWeight:700}}>ส่วนต่าง {diffLabel}</span>
         </div>
       </div>
       <button onClick={()=>{if(window.confirm("ยืนยันลบการปรับยอด?")){onAdjustment(null,dispDate);}}}
@@ -1845,6 +1849,9 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   // กรองตาม date range (from/to) ไม่ใช่แค่วันนี้
   const todayOrders=data.orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
+  // บวกส่วนต่างการปรับยอดเข้า dashRev เพื่อให้ยอดรวมตรงกับเงินจริง
+  const adjDiff=adjToday.reduce((s,o)=>s+(o.cashAdj||0)+(o.qrAdj||0),0);
+  dashRev+=adjDiff;
   // split order: นับ splitCash → cashRev, splitQR → qrRev
   const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
   const cashAdj=adjToday.reduce((s,o)=>s+(o.cashAdj||0),0);
@@ -1898,6 +1905,13 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
 
   function handleCommit(){
     const tc=selList.filter(s=>s.rev>0); if(!tc.length||selRev===0)return;
+    // เตือนถ้าเป็นวันนี้และยังไม่ปรับยอด
+    const isToday=from===to&&from===today;
+    const hasAdj=data.orders.some(o=>o.type==="adjustment"&&o.date===dispDate);
+    if(isToday&&!hasAdj){
+      setConf({type:"warnNoAdj",onConfirm:()=>{setConf(null);setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName});}});
+      return;
+    }
     setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName});
   }
   function doCommit(){
@@ -2067,6 +2081,20 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
         </div>
       </Overlay>}
       {confModal?.type==="viewReceipt"&&<Overlay onClose={()=>setConf(null)} wide><ChangeModal modal={{change:confModal.order.change,received:confModal.order.received,total:confModal.order.total,order:confModal.order,rcpt:confModal.rcpt}} onDismiss={()=>setConf(null)}/></Overlay>}
+      {confModal?.type==="warnNoAdj"&&<Overlay onClose={()=>setConf(null)}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:12}}>⚠️</div>
+          <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:8}}>ยังไม่ได้ปรับยอดวันนี้</div>
+          <div style={{fontSize:13,color:"#8C7C6C",marginBottom:20,lineHeight:1.7}}>
+            หลังบันทึกบัญชีแล้วจะไม่สามารถปรับยอดได้อีก<br/>
+            ต้องการบันทึกต่อโดยไม่ปรับยอดหรือไม่?
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={()=>setConf(null)} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก — ไปปรับยอดก่อน</button>
+            <button onClick={confModal.onConfirm} style={{flex:1,background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>บันทึกต่อ</button>
+          </div>
+        </div>
+      </Overlay>}
       {confModal?.type==="adjustment"&&<AdjustmentModal
         existing={confModal.existing}
         dispDate={dispDate}
