@@ -380,7 +380,8 @@ export default function App() {
       let orders=prev.orders.filter(o=>!(o.type==="adjustment"&&o.date===date));
       // ถ้ามี adj ใหม่ให้เพิ่มเข้าไป
       if(adj){
-        orders=[...orders,{id:uid(),type:"adjustment",date,cashAdj:adj.cashAdj,qrAdj:adj.qrAdj,ts:new Date().toISOString()}];
+        const total=(adj.cashAdj||0)+(adj.qrAdj||0);
+        orders=[...orders,{id:uid(),type:"adjustment",date,cashAdj:adj.cashAdj,qrAdj:adj.qrAdj,total,ts:new Date().toISOString()}];
       }
       const updated={...prev,orders};
       ls_set_data(updated);
@@ -537,24 +538,14 @@ export default function App() {
   // ── Ledger ──
   function addLedgerEntry(entry,ctofPatch){
     const nl=[...ledger,{...entry,id:uid(),ts:new Date().toISOString()}].slice(-MAX_ORDERS);
-    // ถ้า entry มี adjDiff → ลบ adjustment order ออกจาก data หลังบันทึกสำเร็จ
-    // เพื่อไม่ให้ adjDiff ค้างและถูกคำนวณซ้ำ
-    const nd=(entry.adjDiff!==undefined&&entry.adjDiff!==0)
-      ?{...data,orders:data.orders.filter(o=>!(o.type==="adjustment"&&o.date===entry.date))}
-      :null;
-    persist(nd,nl,null,ctofPatch?{...ctof,...ctofPatch}:ctof,true);
+    persist(null,nl,null,ctofPatch?{...ctof,...ctofPatch}:ctof,true);
   }
   function undoLedger(id){
     const e=ledger.find(x=>x.id===id); if(!e)return;
     const nl=ledger.filter(x=>x.id!==id);
     const nc={...ctof};
     if(e.type==="category")(e.catIds||(e.catId?[e.catId]:[])).forEach(cid=>delete nc[cid]);
-    // ถ้า entry มี adjDiff → ลบ adjustment order ของวันนั้นออกด้วย
-    // เพื่อให้แม่ค้าปรับยอดและบันทึกใหม่ได้โดยไม่บวกซ้ำ
-    const nd=(e.adjDiff!==undefined&&e.adjDiff!==0)
-      ?{...data,orders:data.orders.filter(o=>!(o.type==="adjustment"&&o.date===e.date))}
-      :null;
-    persist(nd,nl,null,nc,true);
+    persist(null,nl,null,nc,true);
   }
   function addCashTx(entry){ persist(null,[...ledger,{...entry,id:uid(),ts:new Date().toISOString()}].slice(-MAX_ORDERS),null,null,true); }
   function clearData(){ persist({...data,orders:[]},ledger.filter(e=>e.type==="initial"),costs,{},true); }
@@ -603,7 +594,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.5</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.6.6</span>
       </div>
 
       {/* VIEWS */}
@@ -1861,9 +1852,9 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   let dashRev=0; todayOrders.forEach(o=>o.items.forEach(i=>{dashRev+=i.price*i.qty;}));
   // split order: นับ splitCash → cashRev, splitQR → qrRev
   const adjToday=data.orders.filter(o=>o.type==="adjustment"&&o.date>=from&&o.date<=to);
-  // บวกส่วนต่างการปรับยอดเข้า dashRev เพื่อให้ยอดรวมตรงกับเงินจริง
-  const adjDiff=adjToday.reduce((s,o)=>s+(o.cashAdj||0)+(o.qrAdj||0),0);
-  dashRev+=adjDiff;
+  // adjustment.total = cashAdj + qrAdj รวมเป็น 1 ออเดอร์เหมือนกัน
+  const adjTotal=adjToday.reduce((s,o)=>s+(o.total||0),0);
+  dashRev+=adjTotal;
   const cashAdj=adjToday.reduce((s,o)=>s+(o.cashAdj||0),0);
   const qrAdj=adjToday.reduce((s,o)=>s+(o.qrAdj||0),0);
   const cashRev=todayOrders.reduce((s,o)=>{
@@ -1906,8 +1897,8 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
   const cids=selCats.length===0?sc.map(c=>c.id):selCats;
   const selList=Object.values(catStats).filter(s=>cids.includes(s.cat.id));
   const selRevBase=selList.reduce((a,s)=>a+s.rev,0); // ยอดขายจริงจาก orders
-  // adjDiff บวกเข้าเฉพาะตอนเลือกทุกหมวด สำหรับแสดงผลและบันทึก
-  const selRev=selRevBase+(allChecked?adjDiff:0);
+  // adjTotal บวกเข้าเฉพาะตอนเลือกทุกหมวด
+  const selRev=selRevBase+(allChecked?adjTotal:0);
   const selUnits=selList.reduce((a,s)=>a+s.units,0);
   const selUnitName=selList.length===1?selList[0].unitName:"รายการ";
   const cpu=parseFloat(consolCost)||0;
@@ -1921,15 +1912,15 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
     const isToday=from===to&&from===today;
     const hasAdj=data.orders.some(o=>o.type==="adjustment"&&o.date===dispDate);
     if(isToday&&!hasAdj){
-      setConf({type:"warnNoAdj",onConfirm:()=>{setConf(null);setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName,adjDiff:allChecked?adjDiff:0});}});
+      setConf({type:"warnNoAdj",onConfirm:()=>{setConf(null);setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName,adjTotal:allChecked?adjTotal:0});}});
       return;
     }
-    setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName,adjDiff:allChecked?adjDiff:0});
+    setCmtConf({items:tc,totalRev:selRev,totalCost:parsedCost,totalProfit:selProfit,totalUnits:selUnits,unitName:selUnitName,adjTotal:allChecked?adjTotal:0});
   }
   function doCommit(){
     if(!commitConfirm)return;
     const ts=new Date().toISOString(); const catIds=commitConfirm.items.map(s=>s.cat.id);
-    const entry={type:"category",catIds,catName:commitConfirm.items.map(s=>s.cat.name).join(", "),date:dispDate,units:commitConfirm.totalUnits,unitName:commitConfirm.unitName||"รายการ",revenue:commitConfirm.totalRev,cost:commitConfirm.totalCost,netProfit:commitConfirm.totalProfit,adjDiff:commitConfirm.adjDiff||0};
+    const entry={type:"category",catIds,catName:commitConfirm.items.map(s=>s.cat.name).join(", "),date:dispDate,units:commitConfirm.totalUnits,unitName:commitConfirm.unitName||"รายการ",revenue:commitConfirm.totalRev,cost:commitConfirm.totalCost,netProfit:commitConfirm.totalProfit,adjTotal:commitConfirm.adjTotal||0};
     const p={}; catIds.forEach(id=>{p[id]=ts;});
     onLedgerCommit(entry,p); setCmtConf(null); setConsol("");
   }
@@ -2003,21 +1994,21 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
                 {ctof[cat.id]&&<span style={{fontSize:10,color:"#B0A898"}}>📌{fmtDT(ctof[cat.id])}</span>}
               </label>
             );})}
-            {/* ส่วนต่างปรับยอด — แสดงเมื่อ allChecked และมี adjDiff */}
-            {allChecked&&adjDiff!==0&&(
+            {/* ส่วนต่างปรับยอด — แสดงเมื่อ allChecked และมี adjTotal */}
+            {allChecked&&adjTotal!==0&&(
               <div style={{display:"flex",alignItems:"center",gap:5,fontSize:13}}>
-                <span style={{background:adjDiff>0?"#166534":"#C84B4B",color:"#FFF",borderRadius:10,padding:"2px 10px",fontSize:12,fontWeight:600}}>
+                <span style={{background:adjTotal>0?"#166534":"#C84B4B",color:"#FFF",borderRadius:10,padding:"2px 10px",fontSize:12,fontWeight:600}}>
                   ส่วนต่างปรับยอด
                 </span>
-                <span style={{fontSize:11,color:adjDiff>0?"#166534":"#C84B4B",fontWeight:700}}>
-                  {adjDiff>0?"+":""}{adjDiff.toLocaleString()} บาท
+                <span style={{fontSize:11,color:adjTotal>0?"#166534":"#C84B4B",fontWeight:700}}>
+                  {adjTotal>0?"+":""}{adjTotal.toLocaleString()} บาท
                 </span>
               </div>
             )}
           </div>
         </div>
         <div style={{background:"#F5F0EA",borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          <span style={{fontSize:13,color:"#2C1810",fontWeight:600}}>รวม {selUnits} {selUnitName}{allChecked&&adjDiff!==0?<span style={{color:adjDiff>0?"#166534":"#C84B4B",fontSize:12}}> {adjDiff>0?"+":""}{adjDiff.toLocaleString()}</span>:""} — {baht(selRev)}</span>
+          <span style={{fontSize:13,color:"#2C1810",fontWeight:600}}>รวม {selUnits} {selUnitName}{allChecked&&adjTotal!==0?<span style={{color:adjTotal>0?"#166534":"#C84B4B",fontSize:12}}> {adjTotal>0?"+":""}{adjTotal.toLocaleString()}</span>:""} — {baht(selRev)}</span>
           <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
             <span style={{fontSize:13,color:"#5C4A36"}}>ต้นทุน/หน่วย (฿)</span>
             <input type="number" value={consolCost} onChange={e=>setConsol(e.target.value)} placeholder="0" style={{width:90,padding:"5px 10px",borderRadius:8,border:"1px solid #D4C4B0",background:"#FFF",color:"#2C1810",fontSize:14,fontFamily:"inherit"}}/>
@@ -2138,9 +2129,9 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
             <span style={{fontWeight:600,color:"#5C4A36"}}>{commitConfirm.totalUnits} {commitConfirm.unitName||"รายการ"}</span>
           </div>
           <div style={{borderTop:"1px solid #D4C4B0",marginTop:8,paddingTop:8}}>
-            {commitConfirm.adjDiff!==0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13,marginBottom:6,padding:"5px 8px",background:commitConfirm.adjDiff>0?"#F0FFF4":"#FEF2F2",borderRadius:7}}>
+            {commitConfirm.adjTotal!==0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13,marginBottom:6,padding:"5px 8px",background:commitConfirm.adjTotal>0?"#F0FFF4":"#FEF2F2",borderRadius:7}}>
               <span style={{color:"#8C7C6C"}}>ปรับยอด</span>
-              <span style={{fontWeight:700,color:commitConfirm.adjDiff>0?"#166534":"#C84B4B"}}>{commitConfirm.adjDiff>0?"+":""}{commitConfirm.adjDiff.toLocaleString()} บาท</span>
+              <span style={{fontWeight:700,color:commitConfirm.adjTotal>0?"#166534":"#C84B4B"}}>{commitConfirm.adjTotal>0?"+":""}{commitConfirm.adjTotal.toLocaleString()} บาท</span>
             </div>}
             {[
               ["ยอดขายรวม", baht(commitConfirm.totalRev), "#D4A574", null],
@@ -2222,7 +2213,7 @@ function LedgerView({ledger,cash,data,dispDate,onUndoEntry,onAddCashTx}){
                       {[["จำนวน",`${e.units||0} ${e.unitName||"รายการ"}`,"#6B4F3A"],["ยอดขาย",baht(e.revenue),"#D4A574"],["ทุน",`${baht(e.cost)}${e.units>0?` (${Math.round(e.cost/e.units)}฿/${e.unitName||"รายการ"})`:""}`,"#C87941"],["กำไร",baht(e.netProfit),(e.netProfit||0)>=0?"#3A7A3A":"#C84B4B"]].map(([l,v,c])=>(
                         <div key={l} style={{background:"#F5F0EA",borderRadius:7,padding:"5px 8px",textAlign:"center"}}><div style={{fontSize:10,color:"#8C7C6C"}}>{l}</div><div style={{fontSize:13,fontWeight:700,color:c}}>{v}</div></div>
                       ))}
-                      {(e.adjDiff!==undefined&&e.adjDiff!==0)&&<div style={{gridColumn:"1/-1",background:e.adjDiff>0?"#F0FFF4":"#FEF2F2",borderRadius:7,padding:"4px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"#8C7C6C"}}>ปรับยอด</span><span style={{fontSize:12,fontWeight:700,color:e.adjDiff>0?"#166534":"#C84B4B"}}>{e.adjDiff>0?"+":""}{e.adjDiff.toLocaleString()} บาท</span></div>}
+                      {(e.adjTotal!==undefined&&e.adjTotal!==0)&&<div style={{gridColumn:"1/-1",background:e.adjTotal>0?"#F0FFF4":"#FEF2F2",borderRadius:7,padding:"4px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"#8C7C6C"}}>ปรับยอด</span><span style={{fontSize:12,fontWeight:700,color:e.adjTotal>0?"#166534":"#C84B4B"}}>{e.adjTotal>0?"+":""}{e.adjTotal.toLocaleString()} บาท</span></div>}
                     </div>}
                     {e.type==="initial"&&<div style={{fontSize:13,color:"#4179C8",fontWeight:600}}>ทุน {baht(e.capital)} · กำไร {baht(e.profit)}</div>}
                     {e.type==="expense"&&<div style={{fontSize:13,color:"#C87941",fontWeight:700}}>จ่ายทุน: {baht(e.amount)}{e.desc?<span style={{color:"#8C7C6C",fontWeight:400}}> — {e.desc}</span>:""}</div>}
