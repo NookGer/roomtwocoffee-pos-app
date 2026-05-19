@@ -46,15 +46,14 @@ const SB_URL = "https://ejbggtfgmbfvaaatjmmo.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqYmdndGZnbWJmdmFhYXRqbW1vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODE1OTksImV4cCI6MjA5NDA1NzU5OX0.1Giv3iHq3xgwJsjGr5hlvnr1lVRu6z8xDNTIKVJie6w";
 
 async function sbUpsert(payload) {
-  try {
-    const ts = new Date().toISOString();
-    await fetch(`${SB_URL}/rest/v1/pos_snapshots`, {
-      method: "POST",
-      headers: { "Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`,"Prefer":"resolution=merge-duplicates" },
-      body: JSON.stringify({ id:"main", data:payload, updated_at:ts }),
-    });
-    return ts; // คืน timestamp ที่ส่งไปจริงๆ
-  } catch(e) { console.warn("sb upsert failed",e); return null; }
+  const ts = new Date().toISOString();
+  const res = await fetch(`${SB_URL}/rest/v1/pos_snapshots`, {
+    method: "POST",
+    headers: { "Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`,"Prefer":"resolution=merge-duplicates" },
+    body: JSON.stringify({ id:"main", data:payload, updated_at:ts }),
+  });
+  if(!res.ok) throw new Error(`sbUpsert failed: ${res.status}`);
+  return ts;
 }
 async function sbFetch() {
   // ดึง updated_at มาด้วยเพื่อใช้เปรียบเทียบ timestamp
@@ -219,10 +218,11 @@ export default function App() {
     try{
       const snap=await sbFetch();
       if(snap){
-        const d={...DEF_DATA,...snap.data};
+        const d=snap.data||snap;
         if(!d.addons)d.addons=[];
         if(!d.freeOpts)d.freeOpts=[];
         if(!d.discounts)d.discounts=[];
+        if(!d.categories||!d.categories.length)d.categories=DEF_DATA.categories;
         setData(d);
         if(snap.ledger)setLedger(snap.ledger);
         if(snap.costs)setCosts(snap.costs);
@@ -231,7 +231,6 @@ export default function App() {
         ls_set_data(d);
       }
     }catch(e){}
-    // reset dirty ทุกชั้น
     isDirty.current=false;
     localStorage.removeItem("rt10_dirty");
   };
@@ -589,12 +588,16 @@ export default function App() {
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
         <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger} isReadOnly={isReadOnly}/>
-        {(data.orders&&data.orders.length>0)&&(()=>{
-          const sorted=[...data.orders].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+        {(()=>{
+          if(!data.orders||data.orders.length===0) return null;
+          const validOrders=data.orders.filter(o=>o.ts||o.date);
+          if(!validOrders.length) return null;
+          const sorted=[...validOrders].sort((a,b)=>new Date(a.ts||a.date)-new Date(b.ts||b.date));
           const oldestDate=sorted[0].date||sorted[0].ts?.split("T")[0]||todayStr();
           const days=Math.floor((new Date()-new Date(oldestDate+"T00:00:00"))/(1000*60*60*24));
+          if(days<390) return null;
           const color=days>=396?"#C96C6C":"#C87941";
-          return days>=390?<span style={{fontSize:11,color,fontWeight:700,letterSpacing:"0.03em"}}>({days}/400)</span>:null;
+          return <span style={{fontSize:11,color,fontWeight:700,letterSpacing:"0.03em"}}>({days}/400)</span>;
         })()}
 
         <div style={{flex:1}}/>
@@ -603,7 +606,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.7.4</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.7.8</span>
       </div>
 
       {/* VIEWS */}
@@ -1831,6 +1834,31 @@ function AdjEntry({orders,dispDate,from,to,onAdjustment}){
   );
 }
 
+function CashShiftRow({cashRev,qrRev,lockedProfit,multiDay,pendRev}){
+  const GREEN="#6CC97A", BLUE="#79B8F5";
+  const shift=!multiDay&&lockedProfit>0?cashRev-lockedProfit:null;
+  const shiftColor=shift===null||shift===0?"transparent":shift>0?GREEN:BLUE;
+  const shiftLabel=shift===null?"":shift===0?"✅":shift>0?`฿${Math.abs(shift).toLocaleString()} →`:`← ฿${Math.abs(shift).toLocaleString()}`;
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:pendRev>0?8:0}}>
+      <div style={{flex:1,background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>💵 เงินสด</span>
+        <span style={{fontSize:15,fontWeight:700,color:GREEN}}>{baht(cashRev)}</span>
+      </div>
+      <div style={{minWidth:80,textAlign:"center",padding:"4px 6px"}}>
+        {multiDay
+          ?<span style={{fontSize:10,color:"rgba(255,255,255,.25)",textAlign:"center",display:"block"}}>ดูวันเดียวเพื่อโยกเงิน</span>
+          :<span style={{fontSize:14,fontWeight:700,color:shiftColor,letterSpacing:"0.03em"}}>{shiftLabel}</span>
+        }
+      </div>
+      <div style={{flex:1,background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>📱 โอนจ่าย</span>
+        <span style={{fontSize:15,fontWeight:700,color:BLUE}}>{baht(qrRev)}</span>
+      </div>
+    </div>
+  );
+}
+
 function CatBarChart({orders,products,sc,from,to}){
   const rawOrders=orders.filter(o=>o.date>=from&&o.date<=to&&!o.isCanceled&&o.type!=="adjustment");
   const raw=sc.map(cat=>{
@@ -1981,31 +2009,7 @@ function ReportView({data,dispDate,onVoid,onHardDelete,rcpt,costs,setCosts,onLed
           ))}
         </div>
         {/* แยกยอด เงินสด / โยกเงิน / โอนจ่าย — แถวเดียว */}
-        {(()=>{
-          const shift=from===to&&locked.profit>0?cashRev-locked.profit:null;
-          const GREEN="#6CC97A", BLUE="#79B8F5";
-          const shiftColor=shift===null||shift===0?"transparent":shift>0?GREEN:BLUE;
-          const shiftLabel=shift===null?"":shift===0?"✅":shift>0?`฿${Math.abs(shift).toLocaleString()} →`:`← ฿${Math.abs(shift).toLocaleString()}`;
-          const multiDay=from!==to;
-          return(
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:pendRev>0?8:0}}>
-              <div style={{flex:1,background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>💵 เงินสด</span>
-                <span style={{fontSize:15,fontWeight:700,color:GREEN}}>{baht(cashRev)}</span>
-              </div>
-              <div style={{minWidth:80,textAlign:"center",padding:"4px 6px"}}>
-                {multiDay
-                  ?<span style={{fontSize:10,color:"rgba(255,255,255,.25)",textAlign:"center",display:"block"}}>ดูวันเดียวเพื่อโยกเงิน</span>
-                  :<span style={{fontSize:14,fontWeight:700,color:shiftColor,letterSpacing:"0.03em"}}>{shiftLabel}</span>
-                }
-              </div>
-              <div style={{flex:1,background:"rgba(255,255,255,.06)",borderRadius:9,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:11,color:"rgba(255,255,255,.55)"}}>📱 โอนจ่าย</span>
-                <span style={{fontSize:15,fontWeight:700,color:BLUE}}>{baht(qrRev)}</span>
-              </div>
-            </div>
-          );
-        })()}
+        <CashShiftRow cashRev={cashRev} qrRev={qrRev} lockedProfit={locked.profit} multiDay={from!==to} pendRev={pendRev}/>
         {pendRev>0&&<div style={{background:"rgba(255,255,255,.06)",borderRadius:9,padding:"7px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"rgba(255,255,255,.5)"}}>⏳ รอบันทึกบัญชี ({pendUnits} รายการ)</span><span style={{fontSize:14,fontWeight:700,color:"#C8A882"}}>{baht(pendRev)}</span></div>}
       </div>
 
@@ -2769,3 +2773,4 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
+
