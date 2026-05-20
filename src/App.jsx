@@ -606,7 +606,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.3</span>
       </div>
 
       {/* VIEWS */}
@@ -2583,13 +2583,7 @@ function ReceiptSettingsView({settings,onSave,onClearData,isReadOnly,onToggleRea
             <tbody>
               <tr><td style={{padding:"3px 0"}}>อเมริกาโน่ (เย็น)</td><td style={{textAlign:"center"}}>1 แก้ว</td><td style={{textAlign:"right",fontWeight:600}}>฿35</td></tr>
               <tr><td style={{padding:"3px 0"}}>ลาเต้ (ร้อน)<div style={{fontSize:10,color:"#888"}}>— หวานน้อย</div></td><td style={{textAlign:"center"}}>1 แก้ว</td><td style={{textAlign:"right",fontWeight:600}}>฿50</td></tr>
-            </tbody>
-          </table>
-
-          <Divider type={form.dividerMid2||"dashed"} length={form.dividerMid2Len??100}/>
-          <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
-            <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
-            <tbody>
+              <tr><td colSpan={3} style={{padding:0}}><Divider type={form.dividerMid2||"dashed"} length={form.dividerMid2Len??100}/></td></tr>
               <tr>
                 <td style={{fontWeight:700,fontSize:15,padding:"2px 0"}}>ยอดรวม</td>
                 <td style={{textAlign:"center",fontSize:11,fontWeight:400,color:"#666",padding:"2px 0"}}>2 แก้ว</td>
@@ -2765,12 +2759,8 @@ function ChangeModal({modal,onDismiss}){
             <thead><tr><th style={{padding:"3px 0",fontWeight:600}}>รายการ</th><th style={{textAlign:"center",fontWeight:600}}>จำนวน</th><th style={{textAlign:"right",fontWeight:600}}>ราคา</th></tr>
               <tr><td colSpan={3} style={{padding:0}}><Divider type={divMid1} length={divMid1Len}/></td></tr>
             </thead>
-            <tbody>{order.items.map((item,i)=><tr key={i}><td style={{padding:"3px 0",lineHeight:1.5,wordBreak:"break-word",paddingRight:4}}>{item.name} <span style={{color:"#666",fontSize:10}}>({item.variant})</span>{item.note&&<div style={{fontSize:9,color:"#888"}}>— {item.note}</div>}</td><td style={{textAlign:"center",whiteSpace:"nowrap"}}>{item.qty} {item.unit||""}</td><td style={{textAlign:"right",whiteSpace:"nowrap",fontWeight:600}}>฿{(item.price*item.qty).toLocaleString()}</td></tr>)}</tbody>
-          </table>
-          <Divider type={divMid2} length={divMid2Len}/>
-          <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
-            <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
-            <tbody>
+            <tbody>{order.items.map((item,i)=><tr key={i}><td style={{padding:"3px 0",lineHeight:1.5,wordBreak:"break-word",paddingRight:4}}>{item.name} <span style={{color:"#666",fontSize:10}}>({item.variant})</span>{item.note&&<div style={{fontSize:9,color:"#888"}}>— {item.note}</div>}</td><td style={{textAlign:"center",whiteSpace:"nowrap"}}>{item.qty} {item.unit||""}</td><td style={{textAlign:"right",whiteSpace:"nowrap",fontWeight:600}}>฿{(item.price*item.qty).toLocaleString()}</td></tr>)}
+              <tr><td colSpan={3} style={{padding:0}}><Divider type={divMid2} length={divMid2Len}/></td></tr>
               <tr>
                 <td style={{fontWeight:700,fontSize:15,padding:"2px 0"}}>ยอดรวม</td>
                 <td style={{textAlign:"center",fontSize:11,fontWeight:400,color:"#666",padding:"2px 0"}}>{rcptQtyLabel||""}</td>
