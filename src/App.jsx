@@ -606,7 +606,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.0</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.1</span>
       </div>
 
       {/* VIEWS */}
@@ -2587,7 +2587,16 @@ function ReceiptSettingsView({settings,onSave,onClearData,isReadOnly,onToggleRea
           </table>
 
           <Divider type={form.dividerMid2||"dashed"} length={form.dividerMid2Len??100}/>
-          <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}><span>ยอดรวม</span><span>฿85</span></div>
+          <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
+            <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
+            <tbody>
+              <tr>
+                <td style={{fontWeight:700,fontSize:15,padding:"2px 0"}}>ยอดรวม</td>
+                <td style={{textAlign:"center",fontSize:11,fontWeight:400,color:"#666",padding:"2px 0"}}>2 แก้ว</td>
+                <td style={{textAlign:"right",fontWeight:700,fontSize:15,padding:"2px 0"}}>฿85</td>
+              </tr>
+            </tbody>
+          </table>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:"#166534",fontWeight:600}}>เงินสด</span></div>
 
           {previewQR&&<><Divider type={form.dividerMid3||"dashed"} length={form.dividerMid3Len??100}/><div style={{textAlign:"center"}}>{form.accountName&&<><div style={{fontSize:11,color:"#555",marginBottom:2}}>ชื่อบัญชี</div><div style={{fontSize:13,fontWeight:700,marginBottom:8}}>{form.accountName}</div></>}<QRCodeSVG value={previewQR} size={130} style={{display:"block",margin:"0 auto"}}/><div style={{fontSize:16,fontWeight:700,marginTop:6}}>฿85</div><div style={{fontSize:10,color:"#777",marginTop:2}}>สแกนชำระผ่าน PromptPay</div></div></>}
@@ -2759,13 +2768,16 @@ function ChangeModal({modal,onDismiss}){
             <tbody>{order.items.map((item,i)=><tr key={i}><td style={{padding:"3px 0",lineHeight:1.5,wordBreak:"break-word",paddingRight:4}}>{item.name} <span style={{color:"#666",fontSize:10}}>({item.variant})</span>{item.note&&<div style={{fontSize:9,color:"#888"}}>— {item.note}</div>}</td><td style={{textAlign:"center",whiteSpace:"nowrap"}}>{item.qty} {item.unit||""}</td><td style={{textAlign:"right",whiteSpace:"nowrap",fontWeight:600}}>฿{(item.price*item.qty).toLocaleString()}</td></tr>)}</tbody>
           </table>
           <Divider type={divMid2} length={divMid2Len}/>
-          <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15}}>
-            <span>ยอดรวม</span>
-            <span style={{display:"flex",alignItems:"baseline",gap:8}}>
-              {rcptQtyLabel&&<span style={{fontSize:11,fontWeight:400,color:"#666"}}>{rcptQtyLabel}</span>}
-              <span>฿{order.total?.toLocaleString()}</span>
-            </span>
-          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
+            <colgroup><col style={{width:"55%"}}/><col style={{width:"15%"}}/><col style={{width:"30%"}}/></colgroup>
+            <tbody>
+              <tr>
+                <td style={{fontWeight:700,fontSize:15,padding:"2px 0"}}>ยอดรวม</td>
+                <td style={{textAlign:"center",fontSize:11,fontWeight:400,color:"#666",padding:"2px 0"}}>{rcptQtyLabel||""}</td>
+                <td style={{textAlign:"right",fontWeight:700,fontSize:15,padding:"2px 0"}}>฿{order.total?.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginTop:3}}><span>วิธีชำระ</span><span style={{color:order.paymentMethod==="split"?"#B45309":order.paymentMethod==="qr"?"#1D4ED8":"#166534",fontWeight:600}}>{order.paymentMethod==="split"?"แบ่งจ่าย":order.paymentMethod==="qr"?"โอนจ่าย":"เงินสด"}</span></div>
           {order.paymentMethod==="split"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>📱 โอนจ่าย</span><span style={{color:"#1D4ED8",fontWeight:600}}>฿{(order.splitQR||0).toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>💵 เงินสด</span><span style={{color:"#166534",fontWeight:600}}>฿{(order.splitCash||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
           {order.paymentMethod==="cash"&&<><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>รับเงิน</span><span>฿{order.received?.toLocaleString()}</span></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}><span>เงินทอน</span><span>฿{(order.change||0).toLocaleString()}</span></div><Divider type={divMid3} length={divMid3Len}/></>}
