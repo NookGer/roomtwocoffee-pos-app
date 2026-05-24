@@ -5,7 +5,7 @@ import {
   useSensor, useSensors
 } from "@dnd-kit/core";
 import {
-  SortableContext, verticalListSortingStrategy, useSortable
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -606,7 +606,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.4</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.5</span>
       </div>
 
       {/* VIEWS */}
@@ -1061,6 +1061,30 @@ function AdjustmentModal({existing,dispDate,cashRev,qrRev,onSave,onCancel}){
 // ══════════════════════════════════════════════════
 // QUICK ORDER MODAL — เพิ่ม/แก้ไขออเดอร์ด่วน
 // ══════════════════════════════════════════════════
+function SortablePresetRow({p,data,onEdit,onDel}){
+  const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:p.id});
+  const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
+  return(
+    <div ref={setNodeRef} style={{...style,background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:10,padding:"9px 12px",marginBottom:7}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:p.menus?.length>0?5:0}}>
+        <div {...attributes} {...listeners} style={{cursor:"grab",touchAction:"none",color:"#C4B4A0",display:"flex",alignItems:"center",padding:"2px"}}>
+          <GripVertical size={16}/>
+        </div>
+        <div style={{width:12,height:12,borderRadius:3,background:p.color||"#F5F0EA",border:"1px solid #D4C4B0",flexShrink:0}}/>
+        <span style={{flex:1,fontSize:13,fontWeight:700,color:"#2C1810"}}>⚡ {p.name}</span>
+        <span style={{fontSize:11,color:"#C87941"}}>{p.menus?.length||0} เมนู</span>
+        <button onClick={onEdit} style={{background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>แก้ไข</button>
+        <button onClick={onDel} style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ลบ</button>
+      </div>
+      {(p.menus||[]).map(m=>{
+        const prod=data.products.find(x=>x.id===m.productId);
+        const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
+        return<div key={m.id} style={{fontSize:11,color:"#8C7C6C",paddingLeft:22}}>· {(m.qty||1)>1?`${m.qty}x `:""}{prod?.name||"?"}{vari?.name?` · ${vari.name}`:""} ฿{((vari?.price||0)+(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0))*(m.qty||1)}</div>;
+      })}
+    </div>
+  );
+}
+
 function QuickOrderModal({data,persist,onClose,initCat}){
   const [catName,setCatName]=useState(initCat?.name||"ออเดอร์ด่วน");
   const [color,setColor]=useState(initCat?.color||"#F0C87A");
@@ -1096,6 +1120,16 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   const [presetTC,setPresetTC]=useState("#2C1810");
   const openNewPreset=()=>{setEditPreset({});setPresetName("");setMenus([]);setPresetColor("#F5F0EA");setPresetTC("#2C1810");setShowAddMenu(false);};
   const openEditPreset=p=>{setEditPreset(p);setPresetName(p.name);setMenus(p.menus||[]);setPresetColor(p.color||"#F5F0EA");setPresetTC(p.textColor||"#2C1810");setShowAddMenu(false);};
+  // DnD sensors สำหรับเรียง preset
+  const presetPointer=useSensor(PointerSensor,{activationConstraint:{distance:8}});
+  const presetTouch=useSensor(TouchSensor,{activationConstraint:{delay:200,tolerance:8}});
+  const presetSensors=useSensors(presetPointer,presetTouch);
+  const handlePresetDragEnd=({active,over})=>{
+    if(!over||active.id===over.id) return;
+    const oldIdx=presets.findIndex(p=>p.id===active.id);
+    const newIdx=presets.findIndex(p=>p.id===over.id);
+    if(oldIdx!==-1&&newIdx!==-1) setPresets(prev=>arrayMove(prev,oldIdx,newIdx));
+  };
 
   const addMenu=()=>{
     if(!selProd) return;
@@ -1257,22 +1291,15 @@ function QuickOrderModal({data,persist,onClose,initCat}){
         </Field>
         <div style={{marginBottom:12}}>
           <div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:8}}>Preset ทั้งหมด ({presets.length})</div>
-          {presets.map(p=>(
-            <div key={p.id} style={{background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:10,padding:"9px 12px",marginBottom:7}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:p.menus?.length>0?5:0}}>
-                <div style={{width:14,height:14,borderRadius:4,background:p.color||"#F5F0EA",border:"1px solid #D4C4B0",flexShrink:0}}/>
-                <span style={{flex:1,fontSize:13,fontWeight:700,color:"#2C1810"}}>⚡ {p.name}</span>
-                <span style={{fontSize:11,color:"#C87941"}}>{p.menus?.length||0} เมนู</span>
-                <button onClick={()=>openEditPreset(p)} style={{background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>แก้ไข</button>
-                <button onClick={()=>delPreset(p.id)} style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ลบ</button>
-              </div>
-              {(p.menus||[]).map(m=>{
-                const prod=data.products.find(x=>x.id===m.productId);
-                const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
-                return<div key={m.id} style={{fontSize:11,color:"#8C7C6C",paddingLeft:4}}>· {prod?.name||"?"}{vari?.name?` · ${vari.name}`:""} ฿{(vari?.price||0)+(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0)}</div>;
-              })}
-            </div>
-          ))}
+          <DndContext sensors={presetSensors} collisionDetection={closestCenter} onDragEnd={handlePresetDragEnd}>
+            <SortableContext items={presets.map(p=>p.id)} strategy={verticalListSortingStrategy}>
+              {presets.map(p=>(
+                <SortablePresetRow key={p.id} p={p} data={data}
+                  onEdit={()=>openEditPreset(p)}
+                  onDel={()=>delPreset(p.id)}/>
+              ))}
+            </SortableContext>
+          </DndContext>
           <button onClick={openNewPreset}
             style={{width:"100%",background:"#F5F0EA",border:"1px dashed #C4B4A0",borderRadius:10,padding:"9px",fontSize:13,color:"#8C7C6C",cursor:"pointer",fontFamily:"inherit",marginTop:4}}>
             + เพิ่ม Preset ใหม่
@@ -2787,4 +2814,3 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
-
