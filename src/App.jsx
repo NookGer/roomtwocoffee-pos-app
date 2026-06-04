@@ -606,7 +606,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.5</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.7</span>
       </div>
 
       {/* VIEWS */}
@@ -978,38 +978,25 @@ function OrderModal({product,linked,onConfirm,isEditing=false,initV=null,initAo=
 // ADJUSTMENT MODAL — ปรับยอดประจำวัน (รหัสผ่าน required)
 // ══════════════════════════════════════════════════
 function AdjustmentModal({existing,dispDate,cashRev,qrRev,onSave,onCancel}){
-  const [step,setStep]=useState("pin"); // pin | form
-  const [pin,setPin]=useState("");
-  const [pinErr,setPinErr]=useState(false);
+  const [confirmed,setConfirmed]=useState(false);
   const [cashReal,setCashReal]=useState(existing?String((cashRev+(existing.cashAdj||0))):String(cashRev));
   const [qrReal,setQrReal]=useState(existing?String((qrRev+(existing.qrAdj||0))):String(qrRev));
-  const PASSWORD="ปรับยอดอีกแล้ว";
 
   const cashAdj=parseInt(cashReal||"0",10)-Math.round(cashRev);
   const qrAdj=parseInt(qrReal||"0",10)-Math.round(qrRev);
 
-  const checkPin=()=>{
-    if(pin===PASSWORD){ setStep("form"); setPinErr(false); }
-    else{ setPinErr(true); setPin(""); }
-  };
-
-  if(step==="pin") return(
+  if(!confirmed) return(
     <Overlay onClose={onCancel}>
       <div style={{textAlign:"center"}}>
-        <div style={{fontSize:28,marginBottom:8}}>🔧</div>
-        <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>ปรับยอดประจำวัน</div>
-        <div style={{fontSize:12,color:"#8C7C6C",marginBottom:20}}>กรุณาใส่รหัสเพื่อดำเนินการต่อ</div>
-        <input
-          type="text" value={pin} onChange={e=>setPin(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&checkPin()}
-          placeholder="รหัสผ่าน..."
-          style={{width:"100%",padding:"11px 14px",borderRadius:10,border:`2px solid ${pinErr?"#C84B4B":"#D4C4B0"}`,fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8,background:pinErr?"#FDE8E8":"#F5F0EA",color:"#2C1810",textAlign:"center"}}
-          autoFocus
-        />
-        {pinErr&&<div style={{fontSize:12,color:"#C84B4B",marginBottom:8}}>รหัสไม่ถูกต้อง ลองใหม่อีกครั้ง</div>}
-        <div style={{display:"flex",gap:10,marginTop:4}}>
+        <div style={{fontSize:32,marginBottom:12}}>🔧</div>
+        <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:8}}>ปรับยอดประจำวัน</div>
+        <div style={{fontSize:13,color:"#8C7C6C",marginBottom:24,lineHeight:1.6}}>
+          ต้องการปรับยอดวันนี้ใช่ไหม?<br/>
+          <span style={{fontSize:11}}>หลังบันทึกบัญชีแล้วจะแก้ไขไม่ได้</span>
+        </div>
+        <div style={{display:"flex",gap:10}}>
           <button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
-          <button onClick={checkPin} style={{flex:2,background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>ยืนยัน</button>
+          <button onClick={()=>setConfirmed(true)} style={{flex:2,background:"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>ยืนยัน ปรับยอด</button>
         </div>
       </div>
     </Overlay>
@@ -2814,3 +2801,4 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
+
