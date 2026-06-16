@@ -192,6 +192,9 @@ export default function App() {
   const [syncSt,setSyncSt] = useState(()=>({status:navigator.onLine?"synced":"offline",...ls_get(SK_SYNC,{lastSynced:null})}));
   const [activeCat,setActive]=useState(null);
   const [cart,setCart]     = useState([]);
+  const [cart2,setCart2]   = useState([]);
+  const [activeTab,setActiveTab] = useState("A"); // "A" | "B"
+
   const [modal,setModal]   = useState(null);
   const [dispDate,setDD]   = useState(todayStr);
   const [pendDate,setPend] = useState(null);
@@ -479,7 +482,8 @@ export default function App() {
     const price=calcPrice(vari,selAddons,selDis);
     const baseNote=buildNote(selAddons,selFree,selDis);
     const note=[baseNote,extraNote].filter(Boolean).join(", ");
-    setCart(c=>{
+    const setter=activeTab==="A"?setCart:setCart2;
+    setter(c=>{
       const ex=c.find(i=>i.key===key);
       if(ex) return c.map(i=>i.key===key?{...i,qty:i.qty+1}:i);
       return [...c,{key,productId:prod.id,variantId:vari.id,name:prod.name,variant:vari.name,price,unit:prod.unit||"",note,selAddons,selFree,selDis,qty:1,done:false}];
@@ -503,16 +507,23 @@ export default function App() {
     setModal({type:"editCartItem",product:prod,oldKey:item.key,oldQty:item.qty,initV,initAo:item.selAddons||[],initFree:item.selFree||[],initDis:item.selDis||[]});
   }
 
-  function cartQty(key,d){ setCart(c=>c.map(i=>i.key===key?{...i,qty:Math.max(0,i.qty+d)}:i).filter(i=>i.qty>0)); }
-  function cartDone(key){ setCart(c=>c.map(i=>i.key===key?{...i,done:!i.done}:i)); }
-  const cartTotal=cart.reduce((s,i)=>s+i.price*i.qty,0);
+  function cartQty(key,d){ setActiveCart(c=>c.map(i=>i.key===key?{...i,qty:Math.max(0,i.qty+d)}:i).filter(i=>i.qty>0)); }
+  function cartDone(key){ setActiveCart(c=>c.map(i=>i.key===key?{...i,done:!i.done}:i)); }
+  // active cart ตาม tab ที่เลือก
+  const activeCart = activeTab==="A" ? cart : cart2;
+  const setActiveCart = activeTab==="A" ? setCart : setCart2;
+  const cartTotal=activeCart.reduce((s,i)=>s+i.price*i.qty,0);
 
   // ── Date ──
   function requestDateChange(nd){ if(!nd)return; if(nd===todayStr()){setDD(nd);setNN(peekOrderNum(data.orders,nd));return;} setPend(nd);setModal({type:"confirmDate",newDate:nd}); }
   function confirmDateChange(){ if(pendDate){setDD(pendDate);setNN(peekOrderNum(data.orders,pendDate));setPend(null);} setModal(null); }
 
   // ── Checkout ──
-  function checkout(){ if(!cart.length)return; if(dispDate!==todayStr()) setModal({type:"confirmOrderDate",date:dispDate,cartTotal}); else setModal({type:"payment",received:"",total:cartTotal}); }
+  function checkout(){
+    if(!activeCart.length)return;
+    if(dispDate!==todayStr()) setModal({type:"confirmOrderDate",date:dispDate,cartTotal});
+    else setModal({type:"payment",received:"",total:cartTotal});
+  }
   function confirmPay(lastCart,lastTotal,paymentMethod="cash",splitCash=0,splitQR=0,cashReceived=0){
     const rcv=paymentMethod==="qr"?lastTotal:paymentMethod==="split"?lastTotal:cashReceived;
     if(paymentMethod==="cash"&&rcv<lastTotal)return;
@@ -528,10 +539,12 @@ export default function App() {
     };
     const updatedOrders=[...data.orders,order].slice(-MAX_ORDERS);
     persist({...data,orders:updatedOrders},null,null,null,true);
+    // ล้างเฉพาะตะกร้าที่ชำระ — เปรียบเทียบ reference กับ cart/cart2
+    if(lastCart===cart2) setCart2([]); else setCart([]);
     setNN(peekOrderNum(updatedOrders,dispDate));
     setModal({type:"change",change:order.change,received:order.received,total:lastTotal,order,rcpt});
   }
-  function dismissChange(){ setCart([]); setNN(peekOrderNum(data.orders,dispDate)); setModal(null); }
+  function dismissChange(){ setActiveCart([]); setNN(peekOrderNum(data.orders,dispDate)); setModal(null); }
   function voidOrder(id){ persist({...data,orders:data.orders.map(o=>o.id===id?{...o,isCanceled:true}:o)},null,null,null,true); }
   function hardDelete(id){ persist({...data,orders:data.orders.filter(o=>o.id!==id)},null,null,null,true); }
 
@@ -606,11 +619,11 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.8.7</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.4</span>
       </div>
 
       {/* VIEWS */}
-      {view==="pos"     && <PosView sortedCats={sortedCats} catProducts={catProducts} quickItems={quickItems} isQuickOrderCat={isQuickOrderCat} activeCatObj={activeCatObj} activeCat={activeCat} setActive={setActive} cart={cart} cartTotal={cartTotal} cartQty={cartQty} cartDone={cartDone} checkout={checkout} setCart={setCart} setModal={setModal} nextNum={nextNum} data={data} openEditModal={openEditModal} getLinked={getLinked} addToCart={addToCart}/>}
+      {view==="pos"     && <PosView sortedCats={sortedCats} catProducts={catProducts} quickItems={quickItems} isQuickOrderCat={isQuickOrderCat} activeCatObj={activeCatObj} activeCat={activeCat} setActive={setActive} cart={activeCart} cartA={cart} cartB={cart2} activeTab={activeTab} setActiveTab={setActiveTab} cartTotal={cartTotal} cartQty={cartQty} cartDone={cartDone} checkout={checkout} setCart={setActiveCart} setModal={setModal} nextNum={nextNum} data={data} openEditModal={openEditModal} getLinked={getLinked} addToCart={addToCart}/>}
       {view==="manage"  && <ManageView data={data} persist={(nd,s)=>persist(nd,null,null,null,s)}/>}
       {view==="report"  && <ReportView data={data} dispDate={dispDate} onVoid={voidOrder} onHardDelete={hardDelete} rcpt={rcpt} costs={costs} setCosts={cs=>persist(null,null,cs,null,true)} onLedgerCommit={addLedgerEntry} ctof={ctof} ledger={ledger} onUpdatePayment={handleUpdatePayment} onAdjustment={handleAdjustment}/>}
       {view==="ledger"  && <LedgerView ledger={ledger} cash={cash} data={data} dispDate={dispDate} onUndoEntry={undoLedger} onAddCashTx={addCashTx}/>}
@@ -619,7 +632,7 @@ export default function App() {
       {/* MODALS */}
       {modal?.type==="order"&&<Overlay onClose={()=>setModal(null)} wide><OrderModal product={modal.product} linked={getLinked(modal.product)} onConfirm={(v,ao,fr,dis)=>{addToCart(modal.product,v,ao,fr,dis);setModal(null);}}/></Overlay>}
       {modal?.type==="editCartItem"&&<Overlay onClose={()=>setModal(null)} wide><OrderModal product={modal.product} linked={getLinked(modal.product)} isEditing initV={modal.initV} initAo={modal.initAo} initFree={modal.initFree} initDis={modal.initDis} onConfirm={(v,ao,fr,dis)=>{updateCartItem(modal.oldKey,modal.product,v,ao,fr,dis,modal.oldQty);setModal(null);}}/></Overlay>}
-      {modal?.type==="payment"&&<Overlay onClose={()=>setModal(null)} wide><PaymentModal modal={modal} setModal={setModal} cartTotal={cartTotal} rcpt={rcpt} onConfirm={(rcv)=>confirmPay(cart,cartTotal,"cash",0,0,rcv)} onConfirmQR={()=>confirmPay(cart,cartTotal,"qr")} onConfirmSplit={(splitC,splitQ)=>confirmPay(cart,cartTotal,"split",splitC,splitQ)}/></Overlay>}
+      {modal?.type==="payment"&&<Overlay onClose={()=>setModal(null)} wide bgColor={activeTab==="B"?"#FDE8C4":undefined}><PaymentModal modal={modal} setModal={setModal} cartTotal={cartTotal} rcpt={rcpt} cartLabel={activeTab} onConfirm={(rcv)=>confirmPay(activeCart,cartTotal,"cash",0,0,rcv)} onConfirmQR={()=>confirmPay(activeCart,cartTotal,"qr")} onConfirmSplit={(splitC,splitQ)=>confirmPay(activeCart,cartTotal,"split",splitC,splitQ)}/></Overlay>}
       {modal?.type==="change"&&<Overlay onClose={dismissChange} wide><ChangeModal modal={modal} onDismiss={dismissChange}/></Overlay>}
       {modal?.type==="viewReceipt"&&<Overlay onClose={()=>setModal(null)} wide><ChangeModal modal={modal} onDismiss={()=>setModal(null)}/></Overlay>}
       {modal?.type==="alert"&&<Overlay onClose={()=>setModal(null)}><AlertModal msg={modal.msg} onClose={()=>setModal(null)}/></Overlay>}
@@ -749,7 +762,7 @@ function DatePill({dispDate,badge,onChangeRequest}){
 // ══════════════════════════════════════════════════
 // POS VIEW
 // ══════════════════════════════════════════════════
-function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj,activeCat,setActive,cart,cartTotal,cartQty,cartDone,checkout,setCart,setModal,nextNum,data,openEditModal,getLinked,addToCart}){
+function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj,activeCat,setActive,cart,cartA,cartB,activeTab,setActiveTab,cartTotal,cartQty,cartDone,checkout,setCart,setModal,nextNum,data,openEditModal,getLinked,addToCart}){
   // แก้ IIFE → ใช้ function call แทน
   const buildUnitLabel=()=>{const u={};cart.forEach(i=>{const k=i.unit||"รายการ";u[k]=(u[k]||0)+i.qty;});return Object.keys(u).map(k=>`${u[k]} ${k}`).join(", ");};
   const unitLabel=cart.length===0?"":buildUnitLabel();
@@ -830,9 +843,21 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj
               </div>}
       </div>
       {/* Cart — header fixed, items scroll, footer fixed */}
-      <div style={{width:340,height:"100%",background:"#FFF8F2",borderLeft:"1px solid #E4D4C0",display:"flex",flexDirection:"column",flexShrink:0}}>
+      <div style={{width:340,height:"100%",background:activeTab==="B"?"#FDE8C4":"#FFF8F2",borderLeft:"1px solid #E4D4C0",display:"flex",flexDirection:"column",flexShrink:0}}>
         {/* Header — stays at top always */}
-        <div style={{padding:"14px 16px",borderBottom:"1px solid #E4D4C0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#FFF8F2"}}>
+        {/* Tab ตะกร้า A / B */}
+        <div style={{display:"flex",borderBottom:"2px solid #E4D4C0",flexShrink:0}}>
+          <button onClick={()=>setActiveTab("A")}
+            style={{flex:1,padding:"10px 8px",border:"none",borderBottom:activeTab==="A"?"3px solid #2C1810":"3px solid transparent",background:activeTab==="A"?"#FFF8F2":"#F5F0EA",cursor:"pointer",fontFamily:"inherit",fontWeight:activeTab==="A"?700:500,fontSize:13,color:"#2C1810",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+            🛒 ตะกร้า A{cartA.length>0&&<span style={{fontSize:11}}>💬</span>}
+          </button>
+          <button onClick={()=>setActiveTab("B")}
+            style={{flex:1,padding:"10px 8px",border:"none",borderBottom:activeTab==="B"?"3px solid #C87941":"3px solid transparent",background:activeTab==="B"?"#FFF8F2":"#F5F0EA",cursor:"pointer",fontFamily:"inherit",fontWeight:activeTab==="B"?700:500,fontSize:13,color:"#2C1810",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+            🛒 ตะกร้า B{cartB.length>0&&<span style={{fontSize:11}}>💬</span>}
+          </button>
+        </div>
+        {/* Header ออเดอร์ */}
+        <div style={{padding:"14px 16px",borderBottom:"1px solid #E4D4C0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:activeTab==="B"?"#FDE8C4":"#FFF8F2"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <ShoppingCart size={20} color="#6B4F3A"/>
             <span style={{fontWeight:700,fontSize:18,color:"#2C1810"}}>ออเดอร์</span>
@@ -841,17 +866,17 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj
           {cart.length>0&&<button onClick={()=>setCart([])} style={{background:"none",border:"none",color:"#C88C6C",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ล้างทั้งหมด</button>}
         </div>
         {/* Items — scrollable */}
-        <div style={{flex:1,overflowY:"auto",padding:"8px 12px"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"8px 12px",background:activeTab==="B"?"#FDE8C4":"#FFF"}}>
           {cart.length===0?<div style={{textAlign:"center",color:"#B8A898",marginTop:60,fontSize:16}}><ShoppingCart size={40} style={{margin:"0 auto 12px",opacity:.4}}/><br/>ยังไม่มีรายการ</div>
             :cart.map(item=><CartItem key={item.key} item={item} onQty={cartQty} onDone={cartDone} onEdit={openEditModal}/>)}
         </div>
         {/* Footer — stays at bottom always */}
-        <div style={{padding:"14px 16px",paddingBottom:"max(14px, env(safe-area-inset-bottom, 14px))",borderTop:"1px solid #E4D4C0",flexShrink:0,background:"#FFF8F2"}}>
+        <div style={{padding:"14px 16px",paddingBottom:"max(14px, env(safe-area-inset-bottom, 14px))",borderTop:"1px solid #E4D4C0",flexShrink:0,background:activeTab==="B"?"#FDE8C4":"#FFF8F2"}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,alignItems:"center"}}>
             <span style={{color:"#5C4A36",fontSize:14}}>{unitLabel||"ยังไม่มีรายการ"}</span>
             <span style={{fontWeight:700,fontSize:26,color:"#2C1810"}}>{baht(cartTotal)}</span>
           </div>
-          <button onClick={checkout} style={{width:"100%",background:cart.length?"#2C1810":"#B0A098",color:"#F5E8D8",border:"none",borderRadius:14,padding:"16px",fontSize:20,fontWeight:700,cursor:cart.length?"pointer":"not-allowed",fontFamily:"inherit",transition:"all .18s"}}>💳 จ่ายเงิน</button>
+          <button onClick={checkout} style={{width:"100%",background:cart.length?(activeTab==="B"?"#C87941":"#2C1810"):"#B0A098",color:"#F5E8D8",border:"none",borderRadius:14,padding:"16px",fontSize:20,fontWeight:700,cursor:cart.length?"pointer":"not-allowed",fontFamily:"inherit",transition:"all .18s"}}>💳 ชำระเงิน {activeTab}</button>
         </div>
       </div>
     </div>
@@ -1331,7 +1356,7 @@ function BillDivider({type,length=100}){
 
 const AlertModal=memo(function AlertModal({msg,onClose}){ return<div style={{textAlign:"center",padding:"8px 0"}}><AlertTriangle size={38} color="#C87941" style={{margin:"0 auto 12px"}}/><div style={{fontSize:15,color:"#5C4A36",marginBottom:20,lineHeight:1.6,whiteSpace:"pre-line"}}>{msg}</div><button onClick={onClose} style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px 28px",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ตกลง</button></div>; });
 const ConfirmModal=memo(function ConfirmModal({icon,msg,confirmLabel,confirmColor,onConfirm,onCancel}){ return<div style={{textAlign:"center",padding:"8px 0"}}>{icon}<div style={{fontSize:15,color:"#5C4A36",marginBottom:22,lineHeight:1.7,whiteSpace:"pre-line"}}>{msg}</div><div style={{display:"flex",gap:10}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onConfirm} style={{flex:1,background:confirmColor||"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{confirmLabel||"ยืนยัน"}</button></div></div>; })
-function Overlay({children,onClose,wide}){ return<div style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div style={{background:"#FFFCF8",borderRadius:20,padding:26,paddingTop:20,width:wide?660:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8",position:"relative"}}><button onClick={onClose} style={{position:"absolute",top:14,right:16,background:"rgba(0,0,0,.07)",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#5C4A36",fontSize:18,fontWeight:700,lineHeight:1,zIndex:10}}>×</button>{children}</div></div>; }
+function Overlay({children,onClose,wide,bgColor}){ return<div style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div style={{background:bgColor||"#FFFCF8",borderRadius:20,padding:26,paddingTop:20,width:wide?660:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8",position:"relative"}}><button onClick={onClose} style={{position:"absolute",top:14,right:16,background:"rgba(0,0,0,.07)",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#5C4A36",fontSize:18,fontWeight:700,lineHeight:1,zIndex:10}}>×</button>{children}</div></div>; }
 const AddBtn=memo(function AddBtn({children,onClick,color="#2C1810"}){ return<button onClick={onClick} style={{background:color,color:"#FFF",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>{children}</button>; })
 const SectionLabel=memo(function SectionLabel({children}){ return<div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:7}}>{children}</div>; })
 function IconBtn({variant,onClick,children}){
@@ -2627,7 +2652,7 @@ function ReceiptSettingsView({settings,onSave,onClearData,isReadOnly,onToggleRea
 // ══════════════════════════════════════════════════
 // PAYMENT & CHANGE MODALS
 // ══════════════════════════════════════════════════
-function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,onConfirmSplit,rcpt}){
+function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,onConfirmSplit,rcpt,cartLabel}){
   const [disp,setDisp]=useState(modal.received||"");
   const [showSplit,setShowSplit]=useState(false);
   const [splitQRDisp,setSplitQRDisp]=useState("");
@@ -2649,7 +2674,7 @@ function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,onConfirmS
 
   if(showSplit) return(
     <div>
-      <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>💵📱 แบ่งชำระ</div>
+      <div style={{fontWeight:700,fontSize:16,color:cartLabel==="B"?"#C87941":"#2C1810",marginBottom:4}}>💵📱 แบ่งชำระ — ตะกร้า {cartLabel||"A"}</div>
       <div style={{fontSize:13,color:"#8C7C6C",marginBottom:16}}>ยอดรวม: {baht(cartTotal)}</div>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
         <div style={{background:"#F5F0EA",borderRadius:12,padding:"12px 14px"}}>
@@ -2677,9 +2702,12 @@ function PaymentModal({modal,setModal,cartTotal,onConfirm,onConfirmQR,onConfirmS
     </div>
   );
 
+  const isB=cartLabel==="B";
+  const accentColor=isB?"#C87941":"#2C1810";
+
   return(
     <div>
-      <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:4}}>รับเงิน</div>
+      <div style={{fontWeight:700,fontSize:16,color:accentColor,marginBottom:2}}>รับเงิน — ตะกร้า {cartLabel||"A"}</div>
       <div style={{fontSize:13,color:"#8C7C6C",marginBottom:12}}>ยอดชำระ: {baht(cartTotal)}</div>
       {hasPromptpay&&<button onClick={onConfirmQR}
         style={{width:"100%",background:"#1D4ED8",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -2801,4 +2829,3 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
-
