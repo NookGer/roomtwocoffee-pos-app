@@ -511,7 +511,7 @@ export default function App() {
   function cartDone(key){ setActiveCart(c=>c.map(i=>i.key===key?{...i,done:!i.done}:i)); }
   // active cart ตาม tab ที่เลือก
   const activeCart = activeTab==="A" ? cart : cart2;
-  const setActiveCart = activeTab==="A" ? setCart : setCart2;
+  const setActiveCart = useCallback((v)=>{ if(activeTab==="A") setCart(v); else setCart2(v); },[activeTab]);
   const cartTotal=activeCart.reduce((s,i)=>s+i.price*i.qty,0);
 
   // ── Date ──
@@ -619,7 +619,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.4</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.6</span>
       </div>
 
       {/* VIEWS */}
@@ -2829,3 +2829,4 @@ function ChangeModal({modal,onDismiss}){
     </div>
   );
 }
+
