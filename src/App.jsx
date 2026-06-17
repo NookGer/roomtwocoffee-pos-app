@@ -197,6 +197,29 @@ const iStyle={width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid #
 // ══════════════════════════════════════════════════
 // ROOT APP
 // ══════════════════════════════════════════════════
+// ── Global Error Banner — แสดง error ที่เกิดนอก React render (event handler, async, library นอก React) ──
+// จับโดย window.onerror / unhandledrejection ใน App component แล้วส่งมาแสดงผ่าน component นี้
+// แสดงเป็น banner ลอยด้านบนสุด ไม่ unmount หรือแทนที่ component อื่นใดเลย จึงไม่ทำให้ state ของหน้าที่กำลังใช้งานหาย
+function GlobalErrorBanner({err,onClose}){
+  const [showDetail,setShowDetail]=useState(false);
+  return(
+    <div style={{position:"fixed",top:0,left:0,right:0,zIndex:99999,background:"#C84B4B",color:"#FFF",padding:"12px 16px",fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",boxShadow:"0 4px 12px rgba(0,0,0,.25)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:20}}>⚠️</span>
+        <span style={{flex:1,fontSize:13,fontWeight:600}}>เกิดข้อผิดพลาดบางอย่าง — ข้อมูลที่ทำอยู่อาจไม่ถูกบันทึก กดดูรายละเอียดเพื่อ screenshot ส่งให้ทีมช่วยตรวจสอบ</span>
+        <button onClick={()=>setShowDetail(s=>!s)} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,color:"#FFF",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{showDetail?"ซ่อน":"รายละเอียด"}</button>
+        <button onClick={onClose} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:6,width:26,height:26,color:"#FFF",cursor:"pointer",fontSize:14,fontWeight:700}}>×</button>
+      </div>
+      {showDetail&&<div style={{marginTop:10,padding:10,background:"rgba(0,0,0,.2)",borderRadius:8,fontSize:11,fontFamily:"monospace",maxHeight:160,overflowY:"auto",wordBreak:"break-word"}}>
+        <div style={{marginBottom:4}}><b>ประเภท:</b> {err.type==="promise"?"Async/Promise error":"Runtime error"}</div>
+        <div style={{marginBottom:4}}><b>เวลา:</b> {err.time}</div>
+        <div style={{marginBottom:4}}><b>ข้อความ:</b> {err.message}</div>
+        {err.stack&&<div style={{whiteSpace:"pre-wrap",opacity:.8}}>{err.stack}</div>}
+      </div>}
+    </div>
+  );
+}
+
 // ── Error Boundary — ดักจับ error ที่ไม่คาดคิด แสดงหน้าแจ้งเตือนแทนจอขาว ──
 // ทำงานแบบ passive: ไม่ทำอะไรเลยถ้าไม่มี error เกิดขึ้นจริง ไม่กระทบการทำงานปกติ
 class ErrorBoundary extends Component {
@@ -269,6 +292,35 @@ export default function App() {
     return()=>{
       document.removeEventListener("visibilitychange",handleVisibility);
       if(wakeLock) wakeLock.release().catch(()=>{});
+    };
+  },[]);
+
+  // ── Global Error Catcher — จับ error ที่ React Error Boundary จับไม่ได้ ──
+  // ครอบคลุม: error ใน event handler (onClick ฯลฯ), async/Promise reject, library นอก React (เช่น dnd-kit)
+  // แสดงเป็น banner ลอยด้านบน ไม่ unmount หรือกระทบ component ใดๆ ที่ทำงานอยู่
+  const [globalErr,setGlobalErr]=useState(null);
+  useEffect(()=>{
+    const handleError=(event)=>{
+      setGlobalErr({
+        message:event.error?.message||event.message||"Unknown error",
+        stack:(event.error?.stack||"").slice(0,500),
+        time:new Date().toLocaleString("th-TH"),
+        type:"error"
+      });
+    };
+    const handleRejection=(event)=>{
+      setGlobalErr({
+        message:event.reason?.message||String(event.reason)||"Unhandled promise rejection",
+        stack:(event.reason?.stack||"").slice(0,500),
+        time:new Date().toLocaleString("th-TH"),
+        type:"promise"
+      });
+    };
+    window.addEventListener("error",handleError);
+    window.addEventListener("unhandledrejection",handleRejection);
+    return()=>{
+      window.removeEventListener("error",handleError);
+      window.removeEventListener("unhandledrejection",handleRejection);
     };
   },[]);
 
@@ -681,6 +733,8 @@ export default function App() {
   })();
 
   return (
+    <>
+    {globalErr&&<GlobalErrorBanner err={globalErr} onClose={()=>setGlobalErr(null)}/>}
     <ErrorBoundary>
     <div style={{fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",background:"#F5F0EA",height:"100vh",overflow:"hidden",display:"flex",flexDirection:"column",userSelect:"none"}}>
 
@@ -708,7 +762,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.9</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.0</span>
       </div>
 
       {/* VIEWS */}
@@ -760,6 +814,7 @@ export default function App() {
       {modal?.type==="confirmOrderDate"&&<Overlay onClose={()=>setModal(null)}><ConfirmModal icon={<AlertTriangle size={36} color="#C87941" style={{margin:"0 auto 12px"}}/>} msg={`ออเดอร์จะถูกบันทึกในวันที่\n"${fmtDate(modal.date)}"\nยืนยัน?`} confirmLabel="ยืนยัน" confirmColor="#6B4F3A" onConfirm={()=>setModal({type:"payment",received:"",total:modal.cartTotal})} onCancel={()=>setModal(null)}/></Overlay>}
     </div>
     </ErrorBoundary>
+    </>
   );
 }
 
