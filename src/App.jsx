@@ -9,6 +9,31 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+// ── เสียง "เปิ้ง" แจ้งเตือนชำระเงินสำเร็จ — สร้างด้วย Web Audio API ไม่ใช้ไฟล์เสียง ──
+function playCashSound(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const now=ctx.currentTime;
+    // เสียงสูงแหลมสั้นๆ (ลิ้นชักเปิด)
+    const osc1=ctx.createOscillator();
+    const gain1=ctx.createGain();
+    osc1.connect(gain1); gain1.connect(ctx.destination);
+    osc1.type="sine"; osc1.frequency.setValueAtTime(1400,now);
+    gain1.gain.setValueAtTime(0.25,now);
+    gain1.gain.exponentialRampToValueAtTime(0.001,now+0.12);
+    osc1.start(now); osc1.stop(now+0.12);
+    // เสียงต่ำกระแทกเบาๆ ตามมา (เปิ้ง)
+    const osc2=ctx.createOscillator();
+    const gain2=ctx.createGain();
+    osc2.connect(gain2); gain2.connect(ctx.destination);
+    osc2.type="triangle"; osc2.frequency.setValueAtTime(520,now+0.08);
+    gain2.gain.setValueAtTime(0.001,now+0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.3,now+0.1);
+    gain2.gain.exponentialRampToValueAtTime(0.001,now+0.35);
+    osc2.start(now+0.08); osc2.stop(now+0.35);
+  }catch(e){} // เล่นเสียงไม่ได้ก็ไม่กระทบการทำงานหลัก
+}
+
 // ── PromptPay QR generator — EMVCo standard (PromptPay Thailand) ──
 function generatePromptPayQR(phoneOrId, amount) {
   const raw = phoneOrId.replace(/[^0-9]/g,"");
@@ -184,6 +209,29 @@ export default function App() {
     document.head.appendChild(style);
     return()=>{ document.head.removeChild(link); document.head.removeChild(style); };
   },[]);
+
+  // Wake Lock — กันจอดับขณะใช้แอป ทำงานอัตโนมัติ ไม่ต้องกดเปิด
+  useEffect(()=>{
+    let wakeLock=null;
+    const requestWakeLock=async()=>{
+      try{
+        if("wakeLock" in navigator){
+          wakeLock=await navigator.wakeLock.request("screen");
+        }
+      }catch(e){} // ถ้าเบราว์เซอร์ไม่รองรับหรือขอไม่ได้ ไม่กระทบการทำงานหลัก
+    };
+    requestWakeLock();
+    // ขอใหม่อัตโนมัติเมื่อสลับแอปกลับมา (wake lock จะหลุดตอนสลับแอป)
+    const handleVisibility=()=>{
+      if(document.visibilityState==="visible") requestWakeLock();
+    };
+    document.addEventListener("visibilitychange",handleVisibility);
+    return()=>{
+      document.removeEventListener("visibilitychange",handleVisibility);
+      if(wakeLock) wakeLock.release().catch(()=>{});
+    };
+  },[]);
+
   const [data,setData]     = useState(()=>{ const d=ls_get(SK_DATA,DEF_DATA); if(!d.addons)d.addons=[]; if(!d.freeOpts)d.freeOpts=[]; if(!d.discounts)d.discounts=[]; return d; });
   const [rcpt,setRcptSt]   = useState(()=>ls_get(SK_RCPT,DEF_RCPT));
   const [ledger,setLedger] = useState(()=>ls_get(SK_LDGR,[]));
@@ -581,6 +629,16 @@ export default function App() {
   }
 
   const badge=dateBadge(dispDate);
+  // คำนวณวันสะสมข้อมูล สำหรับ badge แจ้งเตือนใกล้ครบ 400 วัน (ไม่ใช้ IIFE ใน JSX)
+  const storageBadgeDays=(()=>{
+    if(!data.orders||data.orders.length===0) return null;
+    const validOrders=data.orders.filter(o=>o.ts||o.date);
+    if(!validOrders.length) return null;
+    const sorted=[...validOrders].sort((a,b)=>new Date(a.ts||a.date)-new Date(b.ts||b.date));
+    const oldestDate=sorted[0].date||sorted[0].ts?.split("T")[0]||todayStr();
+    const days=Math.floor((new Date()-new Date(oldestDate+"T00:00:00"))/(1000*60*60*24));
+    return days<390?null:days;
+  })();
 
   return (
     <div style={{fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",background:"#F5F0EA",height:"100vh",overflow:"hidden",display:"flex",flexDirection:"column",userSelect:"none"}}>
@@ -601,17 +659,7 @@ export default function App() {
         <Coffee size={26} color="#D4A574"/>
         <span style={{fontWeight:700,fontSize:19,letterSpacing:"0.07em",color:"#D4A574"}}>RoomTwo Coffee</span>
         <SyncIndicator syncSt={syncSt} onRestore={handleRestore} orders={data.orders} ledger={ledger} isReadOnly={isReadOnly}/>
-        {(()=>{
-          if(!data.orders||data.orders.length===0) return null;
-          const validOrders=data.orders.filter(o=>o.ts||o.date);
-          if(!validOrders.length) return null;
-          const sorted=[...validOrders].sort((a,b)=>new Date(a.ts||a.date)-new Date(b.ts||b.date));
-          const oldestDate=sorted[0].date||sorted[0].ts?.split("T")[0]||todayStr();
-          const days=Math.floor((new Date()-new Date(oldestDate+"T00:00:00"))/(1000*60*60*24));
-          if(days<390) return null;
-          const color=days>=396?"#C96C6C":"#C87941";
-          return <span style={{fontSize:11,color,fontWeight:700,letterSpacing:"0.03em"}}>({days}/400)</span>;
-        })()}
+        {storageBadgeDays!==null&&<span style={{fontSize:11,color:storageBadgeDays>=396?"#C96C6C":"#C87941",fontWeight:700,letterSpacing:"0.03em"}}>({storageBadgeDays}/400)</span>}
 
         <div style={{flex:1}}/>
         <DatePill dispDate={dispDate} badge={badge} onChangeRequest={requestDateChange}/>
@@ -619,7 +667,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.6</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.7</span>
       </div>
 
       {/* VIEWS */}
@@ -2388,6 +2436,32 @@ function ReceiptSettingsView({settings,onSave,onClearData,isReadOnly,onToggleRea
   const logoRef=useRef();
   const wmRef=useRef();
 
+  // compress โลโก้ใหม่ที่อัปโหลด — ย่อขนาดและบีบอัด ไม่แตะโลโก้เดิมที่มีอยู่แล้ว
+  function compressLogo(file,cb){
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const MAX=300; // ขนาดสูงสุดด้านยาว
+        let w=img.width, h=img.height;
+        if(w>MAX||h>MAX){
+          if(w>h){ h=Math.round(h*MAX/w); w=MAX; }
+          else{ w=Math.round(w*MAX/h); h=MAX; }
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        ctx.clearRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        cb(canvas.toDataURL('image/png'));
+      };
+      img.onerror=()=>cb(ev.target.result); // ถ้าโหลดรูปไม่ได้ ใช้ไฟล์เดิมไม่บีบอัด (กันข้อมูลหาย)
+      img.src=ev.target.result;
+    };
+    reader.onerror=()=>{}; // อ่านไฟล์ไม่ได้ ไม่ทำอะไร ปลอดภัย
+    reader.readAsDataURL(file);
+  }
+
   // compress รูปลายน้ำเป็น 360x360 JPG 70% ก่อนบันทึก
   function compressWatermark(file,cb){
     const reader=new FileReader();
@@ -2441,7 +2515,7 @@ function ReceiptSettingsView({settings,onSave,onClearData,isReadOnly,onToggleRea
                 <button onClick={()=>logoRef.current?.click()} style={{background:"#F0E8DC",border:"1px solid #D4C4B0",borderRadius:8,padding:"6px 12px",fontSize:13,cursor:"pointer",color:"#5C4A36",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Camera size={12}/> อัปโหลดโลโก้</button>
                 {form.logo&&<button onClick={()=>upd("logo",null)} style={{background:"none",border:"none",color:"#C84B4B",cursor:"pointer",fontSize:12,fontFamily:"inherit",textAlign:"left"}}>ลบโลโก้</button>}
               </div>
-              <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>upd("logo",ev.target.result);r.readAsDataURL(f);}}/>
+              <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;compressLogo(f,result=>upd("logo",result));}}/>
             </div>
           </Field>
           <Field label="ชื่อร้าน"><input value={form.shopName} onChange={e=>upd("shopName",e.target.value)} style={iStyle}/></Field>
@@ -2730,6 +2804,8 @@ function ChangeModal({modal,onDismiss}){
   const [showR,setShowR]=useState(false); const [saving,setSaving]=useState(false);
   const receiptRef=useRef();
   const {order,rcpt={}}=modal;
+  // เล่นเสียงแจ้งเตือนครั้งเดียวตอนเปิดหน้าแสดงเงินทอน
+  useEffect(()=>{ playCashSound(); },[]);
   // จำนวนรวมและหน่วยสำหรับแสดงในบิล
   const rcptTotalQty=(order?.items||[]).reduce((s,i)=>s+(i.qty||1),0);
   const rcptUnits=[...new Set((order?.items||[]).map(i=>i.unit||"รายการ").filter(Boolean))];
