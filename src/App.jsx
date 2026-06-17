@@ -708,7 +708,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.8</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.9</span>
       </div>
 
       {/* VIEWS */}
@@ -1446,7 +1446,42 @@ function BillDivider({type,length=100}){
 
 const AlertModal=memo(function AlertModal({msg,onClose}){ return<div style={{textAlign:"center",padding:"8px 0"}}><AlertTriangle size={38} color="#C87941" style={{margin:"0 auto 12px"}}/><div style={{fontSize:15,color:"#5C4A36",marginBottom:20,lineHeight:1.6,whiteSpace:"pre-line"}}>{msg}</div><button onClick={onClose} style={{background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px 28px",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>ตกลง</button></div>; });
 const ConfirmModal=memo(function ConfirmModal({icon,msg,confirmLabel,confirmColor,onConfirm,onCancel}){ return<div style={{textAlign:"center",padding:"8px 0"}}>{icon}<div style={{fontSize:15,color:"#5C4A36",marginBottom:22,lineHeight:1.7,whiteSpace:"pre-line"}}>{msg}</div><div style={{display:"flex",gap:10}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onConfirm} style={{flex:1,background:confirmColor||"#C84B4B",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{confirmLabel||"ยืนยัน"}</button></div></div>; })
-function Overlay({children,onClose,wide,bgColor}){ return<div style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div style={{background:bgColor||"#FFFCF8",borderRadius:20,padding:26,paddingTop:20,width:wide?660:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8",position:"relative"}}><button onClick={onClose} style={{position:"absolute",top:14,right:16,background:"rgba(0,0,0,.07)",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#5C4A36",fontSize:18,fontWeight:700,lineHeight:1,zIndex:10}}>×</button>{children}</div></div>; }
+// ── Error Boundary สำหรับ popup เดียว — ดักจับ error เฉพาะใน modal นั้น ไม่กระทบแอปหลัก ──
+// ทำงานแบบ passive เหมือน ErrorBoundary หลัก: ไม่แสดงอะไรเลยถ้าไม่มี error จริง
+class ModalErrorBoundary extends Component {
+  constructor(props){
+    super(props);
+    this.state={hasError:false,errorInfo:null,showDetail:false};
+  }
+  static getDerivedStateFromError(error){
+    return {hasError:true};
+  }
+  componentDidCatch(error,errorInfo){
+    this.setState({errorInfo:{message:error?.message||String(error),componentStack:errorInfo?.componentStack||"",time:new Date().toLocaleString("th-TH")}});
+  }
+  render(){
+    if(!this.state.hasError) return this.props.children; // ปกติ ไม่มี error → render ตามปกติ ไม่มีผลกระทบ
+    const info=this.state.errorInfo;
+    return(
+      <div style={{textAlign:"center",padding:"10px 0"}}>
+        <div style={{fontSize:36,marginBottom:10}}>😵</div>
+        <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:6}}>หน้านี้เกิดข้อผิดพลาด</div>
+        <div style={{fontSize:13,color:"#8C7C6C",marginBottom:16}}>กดปิดแล้วลองทำใหม่อีกครั้ง</div>
+        <button onClick={this.props.onClose} style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:12,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:10}}>ปิดหน้านี้</button>
+        <button onClick={()=>this.setState(s=>({showDetail:!s.showDetail}))} style={{background:"none",border:"none",color:"#9C8C7C",fontSize:11,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>
+          {this.state.showDetail?"ซ่อน":"แสดง"}รายละเอียดทางเทคนิค
+        </button>
+        {this.state.showDetail&&info&&<div style={{marginTop:12,padding:10,background:"#F5F0EA",borderRadius:10,textAlign:"left",fontSize:10,color:"#5C4A36",fontFamily:"monospace",maxHeight:160,overflowY:"auto",wordBreak:"break-word"}}>
+          <div style={{marginBottom:4}}><b>เวลา:</b> {info.time}</div>
+          <div style={{marginBottom:4}}><b>ข้อความ:</b> {info.message}</div>
+          {info.componentStack&&<div style={{whiteSpace:"pre-wrap",opacity:.7}}>{info.componentStack.slice(0,400)}</div>}
+        </div>}
+      </div>
+    );
+  }
+}
+
+function Overlay({children,onClose,wide,bgColor}){ return<div style={{position:"fixed",inset:0,background:"rgba(28,12,4,.58)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(5px)"}}><div style={{background:bgColor||"#FFFCF8",borderRadius:20,padding:26,paddingTop:20,width:wide?660:390,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,.3)",border:"1px solid #E8D8C8",position:"relative"}}><button onClick={onClose} style={{position:"absolute",top:14,right:16,background:"rgba(0,0,0,.07)",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#5C4A36",fontSize:18,fontWeight:700,lineHeight:1,zIndex:10}}>×</button><ModalErrorBoundary onClose={onClose}>{children}</ModalErrorBoundary></div></div>; }
 const AddBtn=memo(function AddBtn({children,onClick,color="#2C1810"}){ return<button onClick={onClick} style={{background:color,color:"#FFF",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>{children}</button>; })
 const SectionLabel=memo(function SectionLabel({children}){ return<div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:7}}>{children}</div>; })
 function IconBtn({variant,onClick,children}){
