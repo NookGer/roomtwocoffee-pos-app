@@ -762,7 +762,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.0</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.1</span>
       </div>
 
       {/* VIEWS */}
@@ -1218,9 +1218,18 @@ function AdjustmentModal({existing,dispDate,cashRev,qrRev,onSave,onCancel}){
 // ══════════════════════════════════════════════════
 // QUICK ORDER MODAL — เพิ่ม/แก้ไขออเดอร์ด่วน
 // ══════════════════════════════════════════════════
-function SortablePresetRow({p,data,onEdit,onDel}){
+const SortablePresetRow=memo(function SortablePresetRow({p,data,onEdit,onDel}){
+  // onEdit/onDel ที่ parent ส่งมาเป็น stable function รับ id ตรงๆ (ดูจุดเรียกที่ presets.map)
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:p.id});
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
+  // memoize การค้นหาสินค้า/addon ของแต่ละเมนูในการ์ดนี้ — คำนวณใหม่เฉพาะตอน p.menus หรือ data.products/addons เปลี่ยนจริงๆ
+  // ป้องกัน re-render ทุกครั้งที่ QuickOrderModal เปลี่ยน state เล็กๆ (เช่น พิมพ์ชื่อ) แล้วต้องวน .find() ใหม่ทุก preset ทุกเมนู
+  const menuLines=useMemo(()=>(p.menus||[]).map(m=>{
+    const prod=data.products.find(x=>x.id===m.productId);
+    const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
+    const addonTotal=(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0);
+    return {id:m.id,qty:m.qty||1,prodName:prod?.name||"?",variName:vari?.name||"",price:((vari?.price||0)+addonTotal)*(m.qty||1)};
+  }),[p.menus,data.products,data.addons]);
   return(
     <div ref={setNodeRef} style={{...style,background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:10,padding:"9px 12px",marginBottom:7}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:p.menus?.length>0?5:0}}>
@@ -1230,17 +1239,15 @@ function SortablePresetRow({p,data,onEdit,onDel}){
         <div style={{width:12,height:12,borderRadius:3,background:p.color||"#F5F0EA",border:"1px solid #D4C4B0",flexShrink:0}}/>
         <span style={{flex:1,fontSize:13,fontWeight:700,color:"#2C1810"}}>⚡ {p.name}</span>
         <span style={{fontSize:11,color:"#C87941"}}>{p.menus?.length||0} เมนู</span>
-        <button onClick={onEdit} style={{background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>แก้ไข</button>
-        <button onClick={onDel} style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ลบ</button>
+        <button onClick={()=>onEdit(p.id)} style={{background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>แก้ไข</button>
+        <button onClick={()=>onDel(p.id)} style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ลบ</button>
       </div>
-      {(p.menus||[]).map(m=>{
-        const prod=data.products.find(x=>x.id===m.productId);
-        const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
-        return<div key={m.id} style={{fontSize:11,color:"#8C7C6C",paddingLeft:22}}>· {(m.qty||1)>1?`${m.qty}x `:""}{prod?.name||"?"}{vari?.name?` · ${vari.name}`:""} ฿{((vari?.price||0)+(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0))*(m.qty||1)}</div>;
-      })}
+      {menuLines.map(l=>(
+        <div key={l.id} style={{fontSize:11,color:"#8C7C6C",paddingLeft:22}}>· {l.qty>1?`${l.qty}x `:""}{l.prodName}{l.variName?` · ${l.variName}`:""} ฿{l.price}</div>
+      ))}
     </div>
   );
-}
+});
 
 function QuickOrderModal({data,persist,onClose,initCat}){
   const [catName,setCatName]=useState(initCat?.name||"ออเดอร์ด่วน");
@@ -1277,6 +1284,13 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   const [presetTC,setPresetTC]=useState("#2C1810");
   const openNewPreset=()=>{setEditPreset({});setPresetName("");setMenus([]);setPresetColor("#F5F0EA");setPresetTC("#2C1810");setShowAddMenu(false);};
   const openEditPreset=p=>{setEditPreset(p);setPresetName(p.name);setMenus(p.menus||[]);setPresetColor(p.color||"#F5F0EA");setPresetTC(p.textColor||"#2C1810");setShowAddMenu(false);};
+  // wrapper แบบ stable (ไม่สร้างใหม่ทุก render) รับ id แล้วค้นหา preset เอง — ทำให้ React.memo ของ SortablePresetRow ทำงานได้จริง
+  const handleEditPresetId=useCallback((id)=>{
+    const p=presets.find(x=>x.id===id);
+    if(p) openEditPreset(p);
+  },[presets]);
+  const handleDelPresetId=useCallback((id)=>{ delPreset(id); },[]);
+
   // DnD sensors สำหรับเรียง preset
   const presetPointer=useSensor(PointerSensor,{activationConstraint:{distance:8}});
   const presetTouch=useSensor(TouchSensor,{activationConstraint:{delay:200,tolerance:8}});
@@ -1296,14 +1310,31 @@ function QuickOrderModal({data,persist,onClose,initCat}){
   };
   const delMenu=id=>setMenus(prev=>prev.filter(m=>m.id!==id));
 
+  // persist Preset ทันทีลง Supabase ไม่รอกด "บันทึก" หมวดสุดท้าย
+  // ป้องกันข้อมูลหายถ้าเกิด error/crash ระหว่างที่ยังแก้ไขหมวดอยู่
+  const persistPresets=(newPresets)=>{
+    persist({...data,categories:data.categories.map(c=>{
+      if(!initCat||c.id!==initCat.id) return c;
+      const {items:_removed,...rest}=c;
+      return {...rest,name:catName.trim()||c.name,color,textColor,presets:newPresets};
+    })},null,null,null,true);
+  };
+
   const savePreset=()=>{
     if(!presetName.trim()||menus.length===0) return;
     const p={id:editPreset.id||`qp${uid()}`,name:presetName.trim(),menus,color:presetColor,textColor:presetTC};
-    if(editPreset.id){setPresets(prev=>prev.map(x=>x.id===editPreset.id?p:x));}
-    else{setPresets(prev=>[...prev,p]);}
+    setPresets(prev=>{
+      const next=editPreset.id?prev.map(x=>x.id===editPreset.id?p:x):[...prev,p];
+      if(initCat) persistPresets(next); // มีหมวดอยู่แล้ว (กำลังแก้ไข) → persist ทันที
+      return next;
+    });
     setEditPreset(null);
   };
-  const delPreset=id=>setPresets(prev=>prev.filter(p=>p.id!==id));
+  const delPreset=id=>setPresets(prev=>{
+    const next=prev.filter(p=>p.id!==id);
+    if(initCat) persistPresets(next);
+    return next;
+  });
 
   const save=()=>{
     if(!catName.trim()) return;
@@ -1452,8 +1483,8 @@ function QuickOrderModal({data,persist,onClose,initCat}){
             <SortableContext items={presets.map(p=>p.id)} strategy={verticalListSortingStrategy}>
               {presets.map(p=>(
                 <SortablePresetRow key={p.id} p={p} data={data}
-                  onEdit={()=>openEditPreset(p)}
-                  onDel={()=>delPreset(p.id)}/>
+                  onEdit={handleEditPresetId}
+                  onDel={handleDelPresetId}/>
               ))}
             </SortableContext>
           </DndContext>
