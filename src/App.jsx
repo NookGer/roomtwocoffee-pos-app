@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, memo, Component } from "react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor,
@@ -197,6 +197,46 @@ const iStyle={width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid #
 // ══════════════════════════════════════════════════
 // ROOT APP
 // ══════════════════════════════════════════════════
+// ── Error Boundary — ดักจับ error ที่ไม่คาดคิด แสดงหน้าแจ้งเตือนแทนจอขาว ──
+// ทำงานแบบ passive: ไม่ทำอะไรเลยถ้าไม่มี error เกิดขึ้นจริง ไม่กระทบการทำงานปกติ
+class ErrorBoundary extends Component {
+  constructor(props){
+    super(props);
+    this.state={hasError:false,errorInfo:null,showDetail:false};
+  }
+  static getDerivedStateFromError(error){
+    // เรียกเฉพาะเมื่อ component ลูกเกิด error ตอน render เท่านั้น
+    return {hasError:true};
+  }
+  componentDidCatch(error,errorInfo){
+    this.setState({errorInfo:{message:error?.message||String(error),stack:error?.stack||"",componentStack:errorInfo?.componentStack||"",time:new Date().toLocaleString("th-TH")}});
+  }
+  render(){
+    if(!this.state.hasError) return this.props.children; // ปกติ ไม่มี error → render children ตามปกติ
+    const info=this.state.errorInfo;
+    return(
+      <div style={{position:"fixed",inset:0,background:"#F5F0EA",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20,fontFamily:"'Sarabun','Noto Sans Thai',sans-serif"}}>
+        <div style={{background:"#FFF",borderRadius:20,padding:28,maxWidth:420,width:"100%",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,.15)"}}>
+          <div style={{fontSize:44,marginBottom:12}}>😵</div>
+          <div style={{fontWeight:700,fontSize:18,color:"#2C1810",marginBottom:8}}>เกิดข้อผิดพลาด</div>
+          <div style={{fontSize:14,color:"#8C7C6C",marginBottom:20,lineHeight:1.6}}>
+            แอปขัดข้องชั่วคราว<br/>กดปุ่มด้านล่างเพื่อเริ่มใหม่
+          </div>
+          <button onClick={()=>window.location.reload()} style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:12,padding:"13px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:12}}>🔄 รีเฟรชแอป</button>
+          <button onClick={()=>this.setState(s=>({showDetail:!s.showDetail}))} style={{background:"none",border:"none",color:"#9C8C7C",fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>
+            {this.state.showDetail?"ซ่อน":"แสดง"}รายละเอียดทางเทคนิค
+          </button>
+          {this.state.showDetail&&info&&<div style={{marginTop:14,padding:12,background:"#F5F0EA",borderRadius:10,textAlign:"left",fontSize:11,color:"#5C4A36",fontFamily:"monospace",maxHeight:200,overflowY:"auto",wordBreak:"break-word"}}>
+            <div style={{marginBottom:4}}><b>เวลา:</b> {info.time}</div>
+            <div style={{marginBottom:4}}><b>ข้อความ:</b> {info.message}</div>
+            {info.componentStack&&<div style={{whiteSpace:"pre-wrap",opacity:.7}}>{info.componentStack.slice(0,500)}</div>}
+          </div>}
+        </div>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   // Inject Mali font globally
   useEffect(()=>{
@@ -641,6 +681,7 @@ export default function App() {
   })();
 
   return (
+    <ErrorBoundary>
     <div style={{fontFamily:"'Sarabun','Noto Sans Thai',sans-serif",background:"#F5F0EA",height:"100vh",overflow:"hidden",display:"flex",flexDirection:"column",userSelect:"none"}}>
 
       {/* Loading Screen — ล็อค UI ขณะดึงข้อมูลจาก Supabase */}
@@ -667,7 +708,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.7</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v1.9.8</span>
       </div>
 
       {/* VIEWS */}
@@ -718,6 +759,7 @@ export default function App() {
       {modal?.type==="confirmDate"&&<Overlay onClose={()=>setModal(null)}><ConfirmModal icon={<CalendarDays size={36} color="#C87941" style={{margin:"0 auto 12px"}}/>} msg={`เปลี่ยนวันที่เป็น\n"${fmtDate(modal.newDate)}"\nยืนยัน?`} confirmLabel="ยืนยัน" confirmColor="#6B4F3A" onConfirm={confirmDateChange} onCancel={()=>setModal(null)}/></Overlay>}
       {modal?.type==="confirmOrderDate"&&<Overlay onClose={()=>setModal(null)}><ConfirmModal icon={<AlertTriangle size={36} color="#C87941" style={{margin:"0 auto 12px"}}/>} msg={`ออเดอร์จะถูกบันทึกในวันที่\n"${fmtDate(modal.date)}"\nยืนยัน?`} confirmLabel="ยืนยัน" confirmColor="#6B4F3A" onConfirm={()=>setModal({type:"payment",received:"",total:modal.cartTotal})} onCancel={()=>setModal(null)}/></Overlay>}
     </div>
+    </ErrorBoundary>
   );
 }
 
