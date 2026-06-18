@@ -1425,8 +1425,8 @@ const SortablePresetRowMV=memo(function SortablePresetRowMV({p,data,onEdit,onDel
           <span style={{fontWeight:700,color:"#C87941"}}>฿{info.price}</span>
         </div>
       </div>
-      <IconBtn variant="edit" onClick={e=>{e.stopPropagation();onEdit();}}><Pencil size={13}/></IconBtn>
-      <IconBtn variant="del"  onClick={e=>{e.stopPropagation();onDel();}}><Trash2 size={13}/></IconBtn>
+      <IconBtn variant="edit" onClick={e=>{e.stopPropagation();onEdit(p.id);}}><Pencil size={13}/></IconBtn>
+      <IconBtn variant="del"  onClick={e=>{e.stopPropagation();onDel(p.id);}}><Trash2 size={13}/></IconBtn>
     </div>
   );
 });
@@ -1462,6 +1462,16 @@ function ManageView({data,persist}){
   const filterCatObj=filterCat?data.categories.find(c=>c.id===filterCat):null;
   const isFilterQuickOrder=filterCatObj?.type==="quickorder";
   const catPresets=isFilterQuickOrder?(filterCatObj.presets||[]):[];
+  // callback แบบ stable (ไม่สร้างใหม่ทุก render) สำหรับ SortablePresetRowMV ที่ memo ไว้
+  // รับ id แทน object เพื่อไม่ผูก closure กับ p ตัวใดตัวหนึ่ง — ทำให้ memo() มีผลจริงตอนพิมพ์/เปลี่ยน state อื่นที่ไม่กระทบ preset list
+  const handleEditPresetMV=useCallback(id=>{
+    const p=catPresets.find(x=>x.id===id);
+    if(p) setIM({type:"editPreset",preset:p});
+  },[catPresets]);
+  const handleDelPresetMV=useCallback(id=>{
+    setIM({type:"confirm",icon:<Trash2 size={36} color="#C84B4B" style={{margin:"0 auto 12px"}}/>,msg:"ลบ Preset นี้?",confirmLabel:"ลบเลย",confirmColor:"#C84B4B",
+      onConfirm:()=>persist({...data,categories:data.categories.map(c=>c.id===filterCat?{...c,presets:c.presets.filter(x=>x.id!==id)}:c)},true)});
+  },[filterCat,data,persist]);
 
   const confirm=(msg,fn)=>setIM({type:"confirm",icon:<Trash2 size={36} color="#C84B4B" style={{margin:"0 auto 12px"}}/>,msg,confirmLabel:"ลบเลย",confirmColor:"#C84B4B",onConfirm:fn});
   const catDel =id=>confirm("ลบหมวดหมู่นี้?",()=>{persist({...data,categories:data.categories.filter(c=>c.id!==id),products:data.products.filter(p=>p.categoryId!==id)},true);if(filterCat===id)setFlt(null);});
@@ -1574,8 +1584,8 @@ function ManageView({data,persist}){
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {catPresets.map(p=>(
                       <SortablePresetRowMV key={p.id} p={p} data={data}
-                        onEdit={()=>setIM({type:"editPreset",preset:p})}
-                        onDel={()=>setIM({type:"confirm",icon:<Trash2 size={36} color="#C84B4B" style={{margin:"0 auto 12px"}}/>,msg:"ลบ Preset นี้?",confirmLabel:"ลบเลย",confirmColor:"#C84B4B",onConfirm:()=>persist({...data,categories:data.categories.map(c=>c.id===filterCat?{...c,presets:c.presets.filter(x=>x.id!==p.id)}:c)},true)})}/>
+                        onEdit={handleEditPresetMV}
+                        onDel={handleDelPresetMV}/>
                     ))}
                   </div>
                 </SortableContext>
