@@ -197,6 +197,38 @@ const iStyle={width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid #
 // ══════════════════════════════════════════════════
 // ROOT APP
 // ══════════════════════════════════════════════════
+// ── Migration: แปลง Preset เก่า (nested menus[]) → flat fields ──
+// เดิม: category.presets[] = [{id,name,color,textColor, menus:[{id,productId,variantId,addonIds,freeOptIds,discountIds,note,qty}]}]
+// ใหม่: category.presets[] = [{id,name,color,textColor, productId,variantId,addonIds,freeOptIds,discountIds,note,qty}]
+// ยืนยันจากข้อมูลจริงแล้วว่าทุก preset เดิมมี 1 เมนูต่อ 1 preset เท่านั้น จึง flatten ได้ตรงไปตรงมา ไม่มี edge case ของหลายเมนู
+// เก็บ _legacyMenus (ของเดิมทั้งชุด) สำรองไว้ใน object เผื่อต้องตรวจสอบย้อนหลัง ไม่ลบข้อมูลเดิมทิ้งเด็ดขาด
+// รันแค่ครั้งเดียวตอนโหลด data — เช็คด้วย _migratedPresetsV2 flag กันรันซ้ำไม่จำเป็น
+function migratePresetsV2(data){
+  if(!data || data._migratedPresetsV2) return data; // migrate ไปแล้ว ไม่ต้องทำซ้ำ
+  if(!data.categories || !data.categories.length) return {...data,_migratedPresetsV2:true};
+  let changed=false;
+  const newCategories=data.categories.map(cat=>{
+    if(cat.type!=="quickorder"||!cat.presets||!cat.presets.length) return cat;
+    const newPresets=cat.presets.map(p=>{
+      // ถ้าแบนแล้ว (มี productId ตรงๆ) ไม่ต้องแปลงซ้ำ
+      if(p.productId || !p.menus) return p;
+      const m=p.menus[0]; // ยืนยันแล้วว่ามีแค่ 1 เมนูเสมอ
+      if(!m) return p; // preset ที่ไม่มีเมนูเลย (ผิดปกติ) ปล่อยผ่านไม่แตะ
+      changed=true;
+      return {
+        id:p.id, name:p.name, color:p.color, textColor:p.textColor,
+        productId:m.productId, variantId:m.variantId,
+        addonIds:m.addonIds||[], freeOptIds:m.freeOptIds||[], discountIds:m.discountIds||[],
+        note:m.note||"", qty:m.qty||1,
+        _legacyMenus:p.menus // สำรองของเดิมไว้ ไม่ลบทิ้ง เผื่อต้องตรวจสอบย้อนหลัง
+      };
+    });
+    return {...cat,presets:newPresets};
+  });
+  if(!changed) return {...data,categories:newCategories,_migratedPresetsV2:true};
+  return {...data,categories:newCategories,_migratedPresetsV2:true};
+}
+
 // ── Global Error Banner — แสดง error ที่เกิดนอก React render (event handler, async, library นอก React) ──
 // จับโดย window.onerror / unhandledrejection ใน App component แล้วส่งมาแสดงผ่าน component นี้
 // แสดงเป็น banner ลอยด้านบนสุด ไม่ unmount หรือแทนที่ component อื่นใดเลย จึงไม่ทำให้ state ของหน้าที่กำลังใช้งานหาย
@@ -324,7 +356,11 @@ export default function App() {
     };
   },[]);
 
-  const [data,setData]     = useState(()=>{ const d=ls_get(SK_DATA,DEF_DATA); if(!d.addons)d.addons=[]; if(!d.freeOpts)d.freeOpts=[]; if(!d.discounts)d.discounts=[]; return d; });
+  const [data,setData]     = useState(()=>{
+    const d=ls_get(SK_DATA,DEF_DATA);
+    if(!d.addons)d.addons=[]; if(!d.freeOpts)d.freeOpts=[]; if(!d.discounts)d.discounts=[];
+    return migratePresetsV2(d); // แปลง preset เก่า (nested menus) เป็น flat structure ครั้งเดียว
+  });
   const [rcpt,setRcptSt]   = useState(()=>ls_get(SK_RCPT,DEF_RCPT));
   const [ledger,setLedger] = useState(()=>ls_get(SK_LDGR,[]));
   const [costs,setCosts]   = useState(()=>ls_get(SK_COST,{}));
@@ -366,7 +402,7 @@ export default function App() {
         if(!d.freeOpts)d.freeOpts=[];
         if(!d.discounts)d.discounts=[];
         if(!d.categories||!d.categories.length)d.categories=DEF_DATA.categories;
-        setData(d);
+        setData(migratePresetsV2(d)); // migrate ข้อมูล preset เก่าจาก Supabase ด้วย
         if(snap.ledger)setLedger(snap.ledger);
         if(snap.costs)setCosts(snap.costs);
         if(snap.ctof)setCtof(snap.ctof);
@@ -570,7 +606,8 @@ export default function App() {
         if(!d.freeOpts)d.freeOpts=[];
         if(!d.discounts)d.discounts=[];
         if(!d.categories||!d.categories.length)d.categories=DEF_DATA.categories;
-        setData(d); ls_set_data(d); // เขียน localStorage แค่ 60 วัน memory ครบ 400 วัน
+        const migratedD=migratePresetsV2(d); // migrate ข้อมูล preset เก่าจาก Supabase ด้วย
+        setData(migratedD); ls_set_data(migratedD); // เขียน localStorage แค่ 60 วัน memory ครบ 400 วัน
         setLedger(snap.ledger||d.ledger||[]); ls_set(SK_LDGR,snap.ledger||d.ledger||[]);
         setCosts(snap.costs||d.costs||{}); ls_set(SK_COST,snap.costs||d.costs||{});
         setCtof(snap.ctof||d.ctof||{}); ls_set(SK_CTOF,snap.ctof||d.ctof||{});
@@ -762,7 +799,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.1</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.2</span>
       </div>
 
       {/* VIEWS */}
@@ -931,7 +968,7 @@ function PosView({sortedCats,catProducts,quickItems,isQuickOrderCat,activeCatObj
             : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:16}}>
                 {quickItems.map(qi=>{
                   // รองรับทั้ง preset ใหม่ (menus[]) และ item เดิม (productId)
-                  const menus=qi.menus||(qi.productId?[{id:qi.id,productId:qi.productId,variantId:qi.variantId,addonIds:qi.addonIds||[],freeOptIds:qi.freeOptIds||[]}]:[]);
+                  const menus=qi.menus||(qi.productId?[{id:qi.id,productId:qi.productId,variantId:qi.variantId,addonIds:qi.addonIds||[],freeOptIds:qi.freeOptIds||[],discountIds:qi.discountIds||[],note:qi.note||"",qty:qi.qty||1}]:[]);
                   const totalPrice=menus.reduce((s,m)=>{
                     const prod=data.products.find(p=>p.id===m.productId);
                     const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
@@ -1216,290 +1253,6 @@ function AdjustmentModal({existing,dispDate,cashRev,qrRev,onSave,onCancel}){
 
 
 // ══════════════════════════════════════════════════
-// QUICK ORDER MODAL — เพิ่ม/แก้ไขออเดอร์ด่วน
-// ══════════════════════════════════════════════════
-const SortablePresetRow=memo(function SortablePresetRow({p,data,onEdit,onDel}){
-  // onEdit/onDel ที่ parent ส่งมาเป็น stable function รับ id ตรงๆ (ดูจุดเรียกที่ presets.map)
-  const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:p.id});
-  const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
-  // memoize การค้นหาสินค้า/addon ของแต่ละเมนูในการ์ดนี้ — คำนวณใหม่เฉพาะตอน p.menus หรือ data.products/addons เปลี่ยนจริงๆ
-  // ป้องกัน re-render ทุกครั้งที่ QuickOrderModal เปลี่ยน state เล็กๆ (เช่น พิมพ์ชื่อ) แล้วต้องวน .find() ใหม่ทุก preset ทุกเมนู
-  const menuLines=useMemo(()=>(p.menus||[]).map(m=>{
-    const prod=data.products.find(x=>x.id===m.productId);
-    const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
-    const addonTotal=(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0);
-    return {id:m.id,qty:m.qty||1,prodName:prod?.name||"?",variName:vari?.name||"",price:((vari?.price||0)+addonTotal)*(m.qty||1)};
-  }),[p.menus,data.products,data.addons]);
-  return(
-    <div ref={setNodeRef} style={{...style,background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:10,padding:"9px 12px",marginBottom:7}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:p.menus?.length>0?5:0}}>
-        <div {...attributes} {...listeners} style={{cursor:"grab",touchAction:"none",color:"#C4B4A0",display:"flex",alignItems:"center",padding:"2px"}}>
-          <GripVertical size={16}/>
-        </div>
-        <div style={{width:12,height:12,borderRadius:3,background:p.color||"#F5F0EA",border:"1px solid #D4C4B0",flexShrink:0}}/>
-        <span style={{flex:1,fontSize:13,fontWeight:700,color:"#2C1810"}}>⚡ {p.name}</span>
-        <span style={{fontSize:11,color:"#C87941"}}>{p.menus?.length||0} เมนู</span>
-        <button onClick={()=>onEdit(p.id)} style={{background:"#EDE6DC",color:"#5C4A36",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>แก้ไข</button>
-        <button onClick={()=>onDel(p.id)} style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ลบ</button>
-      </div>
-      {menuLines.map(l=>(
-        <div key={l.id} style={{fontSize:11,color:"#8C7C6C",paddingLeft:22}}>· {l.qty>1?`${l.qty}x `:""}{l.prodName}{l.variName?` · ${l.variName}`:""} ฿{l.price}</div>
-      ))}
-    </div>
-  );
-});
-
-function QuickOrderModal({data,persist,onClose,initCat}){
-  const [catName,setCatName]=useState(initCat?.name||"ออเดอร์ด่วน");
-  const [color,setColor]=useState(initCat?.color||"#F0C87A");
-  const [textColor,setTC]=useState(initCat?.textColor||"#2C1810");
-  // presets = array ของการ์ด แต่ละการ์ดมี menus[] หลายเมนูได้
-  // backward compat: items เดิม (โครงสร้างเก่า) convert เป็น preset เดี่ยว
-  const initPresets=(()=>{
-    const raw=initCat?.presets||[];
-    if(raw.length>0) return raw;
-    // migrate จาก items เดิม (ถ้ามี)
-    const oldItems=initCat?.items||[];
-    if(oldItems.length>0) return oldItems.map(qi=>({id:`qp${uid()}`,name:qi.name,menus:[{id:`qm${uid()}`,productId:qi.productId,variantId:qi.variantId,addonIds:qi.addonIds||[],freeOptIds:qi.freeOptIds||[]}]}));
-    return [];
-  })();
-  const [presets,setPresets]=useState(initPresets);
-  // state สำหรับ preset ที่กำลังแก้ไข
-  const [editPreset,setEditPreset]=useState(null); // null=ไม่แสดง, {}=สร้างใหม่, {id,...}=แก้ไข
-  const [presetName,setPresetName]=useState("");
-  const [menus,setMenus]=useState([]); // menus ของ preset ที่กำลัง edit
-  const [showAddMenu,setShowAddMenu]=useState(false);
-  const [selProd,setSelProd]=useState(null);
-  const [selVariIdx,setSelVariIdx]=useState(0);
-  const [selAddons,setSelAddons]=useState([]);
-  const [selFree,setSelFree]=useState([]);
-  const [selDis,setSelDis]=useState([]);
-
-  const sortedCats=useMemo(()=>data.categories.filter(c=>c.type!=="quickorder").sort((a,b)=>a.order-b.order),[data.categories]);
-  const [selNote,setSelNote]=useState("");
-  const [selQty,setSelQty]=useState(1);
-  const resetMenuForm=()=>{setSelProd(null);setSelVariIdx(0);setSelAddons([]);setSelFree([]);setSelDis([]);setSelNote("");setSelQty(1);};
-
-  const [presetColor,setPresetColor]=useState("#F5F0EA");
-  const [presetTC,setPresetTC]=useState("#2C1810");
-  const openNewPreset=()=>{setEditPreset({});setPresetName("");setMenus([]);setPresetColor("#F5F0EA");setPresetTC("#2C1810");setShowAddMenu(false);};
-  const openEditPreset=p=>{setEditPreset(p);setPresetName(p.name);setMenus(p.menus||[]);setPresetColor(p.color||"#F5F0EA");setPresetTC(p.textColor||"#2C1810");setShowAddMenu(false);};
-  // wrapper แบบ stable (ไม่สร้างใหม่ทุก render) รับ id แล้วค้นหา preset เอง — ทำให้ React.memo ของ SortablePresetRow ทำงานได้จริง
-  const handleEditPresetId=useCallback((id)=>{
-    const p=presets.find(x=>x.id===id);
-    if(p) openEditPreset(p);
-  },[presets]);
-  const handleDelPresetId=useCallback((id)=>{ delPreset(id); },[]);
-
-  // DnD sensors สำหรับเรียง preset
-  const presetPointer=useSensor(PointerSensor,{activationConstraint:{distance:8}});
-  const presetTouch=useSensor(TouchSensor,{activationConstraint:{delay:200,tolerance:8}});
-  const presetSensors=useSensors(presetPointer,presetTouch);
-  const handlePresetDragEnd=({active,over})=>{
-    if(!over||active.id===over.id) return;
-    const oldIdx=presets.findIndex(p=>p.id===active.id);
-    const newIdx=presets.findIndex(p=>p.id===over.id);
-    if(oldIdx!==-1&&newIdx!==-1) setPresets(prev=>arrayMove(prev,oldIdx,newIdx));
-  };
-
-  const addMenu=()=>{
-    if(!selProd) return;
-    const vari=selProd.variants[selVariIdx];
-    setMenus(prev=>[...prev,{id:`qm${uid()}`,productId:selProd.id,variantId:vari?.id,addonIds:selAddons.map(a=>a.id),freeOptIds:selFree,discountIds:selDis.map(d=>d.id),note:selNote.trim(),qty:selQty||1}]);
-    resetMenuForm();setShowAddMenu(false);
-  };
-  const delMenu=id=>setMenus(prev=>prev.filter(m=>m.id!==id));
-
-  // persist Preset ทันทีลง Supabase ไม่รอกด "บันทึก" หมวดสุดท้าย
-  // ป้องกันข้อมูลหายถ้าเกิด error/crash ระหว่างที่ยังแก้ไขหมวดอยู่
-  const persistPresets=(newPresets)=>{
-    persist({...data,categories:data.categories.map(c=>{
-      if(!initCat||c.id!==initCat.id) return c;
-      const {items:_removed,...rest}=c;
-      return {...rest,name:catName.trim()||c.name,color,textColor,presets:newPresets};
-    })},null,null,null,true);
-  };
-
-  const savePreset=()=>{
-    if(!presetName.trim()||menus.length===0) return;
-    const p={id:editPreset.id||`qp${uid()}`,name:presetName.trim(),menus,color:presetColor,textColor:presetTC};
-    setPresets(prev=>{
-      const next=editPreset.id?prev.map(x=>x.id===editPreset.id?p:x):[...prev,p];
-      if(initCat) persistPresets(next); // มีหมวดอยู่แล้ว (กำลังแก้ไข) → persist ทันที
-      return next;
-    });
-    setEditPreset(null);
-  };
-  const delPreset=id=>setPresets(prev=>{
-    const next=prev.filter(p=>p.id!==id);
-    if(initCat) persistPresets(next);
-    return next;
-  });
-
-  const save=()=>{
-    if(!catName.trim()) return;
-    if(initCat){
-      persist({...data,categories:data.categories.map(c=>{
-        if(c.id!==initCat.id) return c;
-        const {items:_removed,...rest}=c; // ลบ items เดิมออก
-        return {...rest,name:catName.trim(),color,textColor,presets};
-      })},null,null,null,true);
-    } else {
-      persist({...data,categories:[...data.categories,{id:`cat${uid()}`,name:catName.trim(),type:"quickorder",color,textColor,order:data.categories.length,presets}]},null,null,null,true);
-    }
-    // รอ persist re-render เสร็จก่อน แล้วค่อย close modal
-    setTimeout(()=>onClose(),50);
-  };
-
-  const linkedAddons=useMemo(()=>selProd?(selProd.linkedAddons||[]).map(id=>data.addons?.find(a=>a.id===id)).filter(Boolean):[],[selProd,data.addons]);
-  const linkedFree=useMemo(()=>selProd?(selProd.linkedFreeOpts||[]).map(id=>data.freeOpts?.find(f=>f.id===id)).filter(Boolean):[],[selProd,data.freeOpts]);
-  const linkedDis=useMemo(()=>selProd?(selProd.linkedDiscounts||[]).map(id=>data.discounts?.find(d=>d.id===id)).filter(Boolean):[],[selProd,data.discounts]);
-
-  // ── render ฟอร์มเพิ่ม/แก้ preset ──
-  if(editPreset!==null) return(
-    <Overlay onClose={()=>setEditPreset(null)}>
-      <div>
-        <div style={{fontWeight:700,fontSize:15,color:"#2C1810",marginBottom:12}}>
-          {editPreset.id?"✏️ แก้ไข preset":"➕ Preset ใหม่"}
-        </div>
-        <Field label="ชื่อ Preset (แสดงบนการ์ด)">
-          <input value={presetName} onChange={e=>setPresetName(e.target.value)} placeholder="เช่น ชุดลูกค้าประจำ" style={iStyle}/>
-        </Field>
-        <Field label="สีการ์ด"><ColorPicker value={presetColor} onChange={setPresetColor}/></Field>
-        <Field label="สีตัวอักษร">
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setPresetTC("#FFF")} style={{flex:1,padding:"7px",borderRadius:8,border:`2px solid ${presetTC==="#FFF"?"#2C1810":"#D4C4B0"}`,background:presetTC==="#FFF"?"#2C1810":"#F0E8DC",color:presetTC==="#FFF"?"#FFF":"#5C4A36",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>ขาว</button>
-            <button onClick={()=>setPresetTC("#2C1810")} style={{flex:1,padding:"7px",borderRadius:8,border:`2px solid ${presetTC==="#2C1810"?"#2C1810":"#D4C4B0"}`,background:presetTC==="#2C1810"?"#EDE6DC":"#F0E8DC",color:"#2C1810",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>น้ำตาล</button>
-          </div>
-          <div style={{marginTop:6,background:presetColor,borderRadius:8,padding:"8px",textAlign:"center",fontSize:13,fontWeight:700,color:presetTC}}>⚡ {presetName||"ชื่อ Preset"}</div>
-        </Field>
-        {/* รายการเมนูใน preset */}
-        <div style={{marginBottom:10}}>
-          <div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:6}}>เมนูในชุดนี้ ({menus.length} รายการ)</div>
-          {menus.map(m=>{
-            const prod=data.products.find(p=>p.id===m.productId);
-            const vari=prod?.variants.find(v=>v.id===m.variantId)||prod?.variants[0];
-            const price=(vari?.price||0)+(m.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0);
-            const note=[...(m.addonIds||[]).map(aid=>{const a=data.addons?.find(x=>x.id===aid);return a?.name||"";}),(m.freeOptIds||[]).map(f=>f.optLabel||"").filter(Boolean),(m.discountIds||[]).map(did=>{const d=data.discounts?.find(x=>x.id===did);return d?`-฿${d.amount}`:"";}). filter(Boolean),m.note?[m.note]:[]].flat().filter(Boolean).join(", ");
-            return(
-              <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,background:"#FFF5DC",border:"1px solid #F0C87A",borderRadius:9,padding:"7px 10px",marginBottom:5}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#2C1810"}}>{(m.qty||1)>1&&<span style={{background:"#C87941",color:"#FFF",borderRadius:5,padding:"1px 5px",fontSize:11,marginRight:4}}>{m.qty}x</span>}{prod?.name||"?"}{vari?.name?` · ${vari.name}`:""}</div>
-                  {note&&<div style={{fontSize:11,color:"#9C8C7C"}}>{note}</div>}
-                </div>
-                <span style={{fontSize:12,color:"#C87941",fontWeight:600}}>฿{price*(m.qty||1)}</span>
-                <button onClick={()=>delMenu(m.id)} style={{background:"#FDE8E8",color:"#C84B4B",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>ลบ</button>
-              </div>
-            );
-          })}
-          {!showAddMenu&&<button onClick={()=>setShowAddMenu(true)}
-            style={{width:"100%",background:"#F5F0EA",border:"1px dashed #C4B4A0",borderRadius:9,padding:"8px",fontSize:12,color:"#8C7C6C",cursor:"pointer",fontFamily:"inherit",marginTop:4}}>
-            + เพิ่มเมนูในชุดนี้
-          </button>}
-        </div>
-        {showAddMenu&&<div style={{background:"#F0EBE3",borderRadius:11,padding:"11px",marginBottom:10}}>
-          <div style={{fontSize:12,fontWeight:600,color:"#5C4A36",marginBottom:7}}>เลือกเมนู</div>
-          <Field label="สินค้า">
-            <select value={selProd?.id||""} onChange={e=>{const p=data.products.find(x=>x.id===e.target.value);setSelProd(p||null);setSelVariIdx(0);setSelAddons([]);setSelFree([]);}} style={{...iStyle,color:selProd?"#2C1810":"#9C8C7C"}}>
-              <option value="">-- เลือกสินค้า --</option>
-              {sortedCats.map(c=>(<optgroup key={c.id} label={c.name}>{data.products.filter(p=>p.categoryId===c.id).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>))}
-            </select>
-          </Field>
-          {selProd&&selProd.variants.length>1&&<Field label="รูปแบบ">
-            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {selProd.variants.map((v,i)=><button key={v.id} onClick={()=>setSelVariIdx(i)}
-                style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${selVariIdx===i?"#2C1810":"#D4C4B0"}`,background:selVariIdx===i?"#2C1810":"#FFF",color:selVariIdx===i?"#FFF":"#5C4A36",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                {v.name} ฿{v.price}
-              </button>)}
-            </div>
-          </Field>}
-          {selProd&&linkedFree.length>0&&linkedFree.map(fg=>(
-            <Field key={fg.id} label={fg.name}>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                {(fg.options||[]).map(opt=>{
-                  const sel=selFree.find(f=>f.groupId===fg.id&&f.optId===opt.id);
-                  return<button key={opt.id} onClick={()=>setSelFree(prev=>sel?prev.filter(f=>!(f.groupId===fg.id&&f.optId===opt.id)):[...prev.filter(f=>f.groupId!==fg.id),{groupId:fg.id,groupName:fg.name,optId:opt.id,optLabel:opt.label}])}
-                    style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${sel?"#4A7C6B":"#D4C4B0"}`,background:sel?"#4A7C6B":"#FFF",color:sel?"#FFF":"#5C4A36",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{opt.label}</button>;
-                })}
-              </div>
-            </Field>
-          ))}
-          {selProd&&linkedAddons.length>0&&<Field label="Add-on">
-            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {linkedAddons.map(a=>{const sel=selAddons.find(x=>x.id===a.id);return<button key={a.id} onClick={()=>setSelAddons(prev=>sel?prev.filter(x=>x.id!==a.id):[...prev,{id:a.id,name:a.name,price:a.price}])}
-                style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${sel?"#C87941":"#D4C4B0"}`,background:sel?"#FFF5DC":"#FFF",color:sel?"#C87941":"#5C4A36",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{a.name} +฿{a.price}</button>;})}
-            </div>
-          </Field>}
-          {selProd&&linkedDis.length>0&&<Field label="ส่วนลด">
-            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {linkedDis.map(d=>{const sel=selDis.find(x=>x.id===d.id);return<button key={d.id} onClick={()=>setSelDis(prev=>sel?prev.filter(x=>x.id!==d.id):[...prev,{id:d.id,name:d.name,amount:d.amount}])}
-                style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${sel?"#C84B4B":"#FCA5A5"}`,background:sel?"#FDE8E8":"#FFF",color:sel?"#C84B4B":"#9C4A4A",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{d.name} -฿{d.amount}</button>;})}
-            </div>
-          </Field>}
-          {selProd&&<Field label="จำนวน (qty)">
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={()=>setSelQty(q=>Math.max(1,q-1))} style={{background:"#F0E8DC",border:"none",borderRadius:7,width:32,height:32,fontSize:16,cursor:"pointer",fontFamily:"inherit"}}>-</button>
-              <span style={{fontWeight:700,fontSize:16,minWidth:24,textAlign:"center"}}>{selQty}</span>
-              <button onClick={()=>setSelQty(q=>q+1)} style={{background:"#F0E8DC",border:"none",borderRadius:7,width:32,height:32,fontSize:16,cursor:"pointer",fontFamily:"inherit"}}>+</button>
-            </div>
-          </Field>}
-          {selProd&&<Field label="โน้ตพิเศษ (ถ้ามี)">
-            <input value={selNote} onChange={e=>setSelNote(e.target.value)} placeholder="เช่น ไม่ใส่น้ำแข็ง, extra shot" style={iStyle}/>
-          </Field>}
-          <div style={{display:"flex",gap:8,marginTop:8}}>
-            <button onClick={()=>{setShowAddMenu(false);resetMenuForm();}} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:9,padding:"8px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
-            <button onClick={addMenu} disabled={!selProd} style={{flex:2,background:selProd?"#2C1810":"#C0B0A0",color:"#FFF",border:"none",borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:selProd?"pointer":"not-allowed",fontFamily:"inherit"}}>+ เพิ่มเมนูนี้</button>
-          </div>
-        </div>}
-        <div style={{display:"flex",gap:8,marginTop:4}}>
-          <button onClick={()=>setEditPreset(null)} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"10px",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button>
-          <button onClick={savePreset} disabled={!presetName.trim()||menus.length===0}
-            style={{flex:2,background:(presetName.trim()&&menus.length>0)?"#2C1810":"#C0B0A0",color:"#FFF",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:700,cursor:(presetName.trim()&&menus.length>0)?"pointer":"not-allowed",fontFamily:"inherit"}}>
-            {editPreset.id?"บันทึก Preset":"เพิ่ม Preset"}
-          </button>
-        </div>
-      </div>
-    </Overlay>
-  );
-
-  return(
-    <Overlay onClose={onClose}>
-      <div>
-        <div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:16}}>⚡ {initCat?"แก้ไข":"สร้าง"}ออเดอร์ด่วน</div>
-        <Field label="ชื่อหมวด">
-          <input value={catName} onChange={e=>setCatName(e.target.value)} placeholder="เช่น ออเดอร์ด่วน" style={iStyle}/>
-        </Field>
-        <Field label="สีพื้นหลังการ์ด"><ColorPicker value={color} onChange={setColor}/></Field>
-        <Field label="สีตัวอักษร">
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setTC("#FFF")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#FFF"?"#2C1810":"#D4C4B0"}`,background:textColor==="#FFF"?"#2C1810":"#F0E8DC",color:textColor==="#FFF"?"#FFF":"#5C4A36",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>สีขาว</button>
-            <button onClick={()=>setTC("#3B1F0A")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#3B1F0A"?"#2C1810":"#D4C4B0"}`,background:textColor==="#3B1F0A"?"#EDE6DC":"#F0E8DC",color:"#3B1F0A",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>น้ำตาลเข้ม</button>
-          </div>
-          <div style={{marginTop:8,background:color,borderRadius:9,padding:"10px",textAlign:"center",fontSize:14,fontWeight:700,color:textColor}}>⚡ {catName||"ออเดอร์ด่วน"}</div>
-        </Field>
-        <div style={{marginBottom:12}}>
-          <div style={{fontSize:12,color:"#8C7C6C",fontWeight:600,marginBottom:8}}>Preset ทั้งหมด ({presets.length})</div>
-          <DndContext sensors={presetSensors} collisionDetection={closestCenter} onDragEnd={handlePresetDragEnd}>
-            <SortableContext items={presets.map(p=>p.id)} strategy={verticalListSortingStrategy}>
-              {presets.map(p=>(
-                <SortablePresetRow key={p.id} p={p} data={data}
-                  onEdit={handleEditPresetId}
-                  onDel={handleDelPresetId}/>
-              ))}
-            </SortableContext>
-          </DndContext>
-          <button onClick={openNewPreset}
-            style={{width:"100%",background:"#F5F0EA",border:"1px dashed #C4B4A0",borderRadius:10,padding:"9px",fontSize:13,color:"#8C7C6C",cursor:"pointer",fontFamily:"inherit",marginTop:4}}>
-            + เพิ่ม Preset ใหม่
-          </button>
-        </div>
-        <ModalFooter onCancel={onClose} onSave={save} saveLabel={initCat?"บันทึก":"สร้าง"}/>
-      </div>
-    </Overlay>
-  );
-}
-
-// ══════════════════════════════════════════════════
 // SHARED MICRO COMPONENTS — ต้องอยู่ก่อน ManageView และ components อื่นที่ใช้
 // ══════════════════════════════════════════════════
 
@@ -1578,7 +1331,7 @@ const ChipBtn=memo(function ChipBtn({active,onClick,color,children}){ return<but
 const ColorPicker=memo(function ColorPicker({value,onChange}){ return<div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:2}}>{PALETTE.map(c=><div key={c} onClick={()=>onChange(c)} style={{width:28,height:28,borderRadius:7,background:c,cursor:"pointer",border:value===c?"3px solid #2C1810":"2px solid transparent",boxShadow:value===c?"0 0 0 2px #FFF,0 0 0 4px #2C1810":"none",transition:"all .15s"}}/>)}</div>; });
 const ModalTitle=memo(function ModalTitle({children}){ return<div style={{fontWeight:700,fontSize:16,color:"#2C1810",marginBottom:18}}>{children}</div>; })
 const Field=memo(function Field({label,children}){ return<div style={{marginBottom:14}}><div style={{fontSize:12,color:"#8C7C6C",marginBottom:5,fontWeight:500}}>{label}</div>{children}</div>; })
-const ModalFooter=memo(function ModalFooter({onCancel,onSave}){ return<div style={{display:"flex",gap:10,marginTop:4}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={onSave} style={{flex:2,background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>บันทึก</button></div>; })
+const ModalFooter=memo(function ModalFooter({onCancel,onSave,disabled}){ return<div style={{display:"flex",gap:10,marginTop:4}}><button onClick={onCancel} style={{flex:1,background:"#F0E8DC",color:"#5C4A36",border:"none",borderRadius:10,padding:"11px",fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>ยกเลิก</button><button onClick={disabled?undefined:onSave} disabled={disabled} style={{flex:2,background:disabled?"#D4C4B0":"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",opacity:disabled?.7:1}}>บันทึก</button></div>; })
 const EmptyMsg=memo(function EmptyMsg({label}){ return<div style={{textAlign:"center",color:"#9C8C7C",padding:"40px 0",fontSize:14}}><Coffee size={32} style={{margin:"0 auto 10px",opacity:.35}}/><br/>{label}</div>; })
 const CartItem=memo(function CartItem({item,onQty,onDone,onEdit}){
   return(
@@ -1644,6 +1397,40 @@ const SortableProdRow=memo(function SortableProdRow({prod,cat,lc,onEdit,onDel}){
   );
 });
 
+// Preset row ในหน้า "สินค้า" (ManageView) — แสดงเหมือนสินค้าทั่วไป แต่ดึงข้อมูลจาก preset (flat structure ใหม่)
+// memo + useMemo ป้องกัน re-render หนักเหมือนที่เคยเป็นปัญหาใน SortablePresetRow เดิม
+const SortablePresetRowMV=memo(function SortablePresetRowMV({p,data,onEdit,onDel}){
+  const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:p.id});
+  const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
+  const info=useMemo(()=>{
+    const prod=data.products.find(x=>x.id===p.productId);
+    const vari=prod?.variants.find(v=>v.id===p.variantId)||prod?.variants[0];
+    const addonTotal=(p.addonIds||[]).reduce((s,aid)=>{const a=data.addons?.find(x=>x.id===aid);return s+(a?.price||0);},0);
+    const disTotal=(p.discountIds||[]).reduce((s,did)=>{const d=data.discounts?.find(x=>x.id===did);return s+(d?.amount||0);},0);
+    const price=Math.max(0,(vari?.price||0)+addonTotal-disTotal)*(p.qty||1);
+    return {prodName:prod?.name||"?",variName:vari?.name||"",price};
+  },[p.productId,p.variantId,p.addonIds,p.discountIds,p.qty,data.products,data.addons,data.discounts]);
+  return(
+    <div ref={setNodeRef} style={{...style,display:"flex",alignItems:"center",gap:10,background:"#FFF8F2",border:`1.5px solid ${isDragging?"#D4A574":"#E8D8C8"}`,borderRadius:13,padding:"10px 14px",boxShadow:isDragging?"0 8px 24px rgba(0,0,0,.12)":undefined}}>
+      <div {...attributes} {...listeners} style={{cursor:"grab",touchAction:"none",padding:"4px",color:"#C4B4A0",display:"flex",alignItems:"center"}}>
+        <GripVertical size={20}/>
+      </div>
+      <div style={{width:38,height:38,borderRadius:9,background:p.color||"#F0C87A",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize:16}}>⚡</span>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:600,color:"#2C1810"}}>{p.name}</div>
+        <div style={{fontSize:11,color:"#8C7C6C",display:"flex",gap:6,flexWrap:"wrap",marginTop:2,alignItems:"center"}}>
+          <span>{(p.qty||1)>1?`${p.qty}x `:""}{info.prodName}{info.variName?` · ${info.variName}`:""}</span>
+          <span style={{fontWeight:700,color:"#C87941"}}>฿{info.price}</span>
+        </div>
+      </div>
+      <IconBtn variant="edit" onClick={e=>{e.stopPropagation();onEdit();}}><Pencil size={13}/></IconBtn>
+      <IconBtn variant="del"  onClick={e=>{e.stopPropagation();onDel();}}><Trash2 size={13}/></IconBtn>
+    </div>
+  );
+});
+
 const SortableAddonRow=memo(function SortableAddonRow({ao,onEdit,onDel}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:ao.id});
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.5:1,zIndex:isDragging?10:undefined};
@@ -1671,6 +1458,10 @@ function ManageView({data,persist}){
 
   useEffect(()=>{ if(tab==="prods"&&!filterCat&&sortedCats.length>0)setFlt(sortedCats[0].id); },[tab]);
   const catProds=filterCat?data.products.filter(p=>p.categoryId===filterCat).sort((a,b)=>a.order-b.order):[];
+  // หมวดที่เลือกอยู่ตอนนี้ — ถ้าเป็น type quickorder ให้แสดง preset แทนสินค้าปกติ
+  const filterCatObj=filterCat?data.categories.find(c=>c.id===filterCat):null;
+  const isFilterQuickOrder=filterCatObj?.type==="quickorder";
+  const catPresets=isFilterQuickOrder?(filterCatObj.presets||[]):[];
 
   const confirm=(msg,fn)=>setIM({type:"confirm",icon:<Trash2 size={36} color="#C84B4B" style={{margin:"0 auto 12px"}}/>,msg,confirmLabel:"ลบเลย",confirmColor:"#C84B4B",onConfirm:fn});
   const catDel =id=>confirm("ลบหมวดหมู่นี้?",()=>{persist({...data,categories:data.categories.filter(c=>c.id!==id),products:data.products.filter(p=>p.categoryId!==id)},true);if(filterCat===id)setFlt(null);});
@@ -1721,6 +1512,20 @@ function ManageView({data,persist}){
     const[m]=arr.splice(fi,1); arr.splice(ti,0,m);
     persist({...data,products:[...data.products.filter(p=>p.categoryId!==filterCat),...reindex(arr)]},true);
   };
+  // DnD สำหรับเรียงลำดับ Preset ในหมวด quickorder — pattern เดียวกับ handleProdDragEnd
+  const presetSensorsMV=useSensors(
+    useSensor(PointerSensor,{activationConstraint:{distance:8}}),
+    useSensor(TouchSensor,{activationConstraint:{delay:200,tolerance:8}})
+  );
+  const handlePresetDragEndMV=(event)=>{
+    const{active,over}=event;
+    if(!over||active.id===over.id)return;
+    const arr=[...catPresets];
+    const fi=arr.findIndex(x=>x.id===active.id);
+    const ti=arr.findIndex(x=>x.id===over.id);
+    const[m]=arr.splice(fi,1); arr.splice(ti,0,m);
+    persist({...data,categories:data.categories.map(c=>c.id===filterCat?{...c,presets:arr}:c)},true);
+  };
 
   const TABS=[["cats","📂 หมวดหมู่"],["prods","☕ สินค้า"],["addons","🏷️ Add-on"],["freeopts","ตัวเลือกเสริม"],["discounts","🏷️ ส่วนลด"]];
 
@@ -1730,8 +1535,8 @@ function ManageView({data,persist}){
       <div style={{display:"flex",gap:8,marginBottom:20,alignItems:"center",flexWrap:"wrap"}}>
         {TABS.map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{background:tab===k?"#2C1810":"#F0E8DC",color:tab===k?"#FFF":"#5C4A36",border:"none",borderRadius:10,padding:"9px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>)}
         <div style={{flex:1}}/>
-        {tab==="cats"     &&<><AddBtn onClick={()=>setIM({type:"addCat"})}>เพิ่มหมวดหมู่</AddBtn><AddBtn color="#C87941" onClick={()=>setIM({type:"addQuickOrder"})}>⚡ ออเดอร์ด่วน</AddBtn></>}
-        {tab==="prods"    &&<AddBtn onClick={()=>setIM({type:"addProd",catId:filterCat||data.categories[0]?.id})}>เพิ่มสินค้า</AddBtn>}
+        {tab==="cats"     &&<><AddBtn onClick={()=>setIM({type:"addCat"})}>เพิ่มหมวดหมู่</AddBtn><AddBtn color="#C87941" onClick={()=>setIM({type:"addQuickOrderCat"})}>⚡ ออเดอร์ด่วน</AddBtn></>}
+        {tab==="prods"    &&<AddBtn onClick={()=>setIM(isFilterQuickOrder?{type:"addPreset"}:{type:"addProd",catId:filterCat||data.categories[0]?.id})}>{isFilterQuickOrder?"⚡ เพิ่ม Preset ใหม่":"เพิ่มสินค้า"}</AddBtn>}
         {tab==="addons"   &&<AddBtn onClick={()=>setIM({type:"addAddon"})}>เพิ่ม Add-on</AddBtn>}
         {tab==="freeopts" &&<AddBtn color="#4A7C6B" onClick={()=>setIM({type:"addFreeOpt"})}>เพิ่มตัวเลือกเสริม</AddBtn>}
         {tab==="discounts"&&<AddBtn color="#C84B4B" onClick={()=>setIM({type:"addDiscount"})}>เพิ่มส่วนลด</AddBtn>}
@@ -1747,7 +1552,7 @@ function ManageView({data,persist}){
               {sortedCats.map(cat=>(
                 <SortableCatRow key={cat.id} cat={cat}
                   productCount={cat.type==="quickorder"?(cat.presets||cat.items||[]).length:data.products.filter(p=>p.categoryId===cat.id).length}
-                  onEdit={()=>setIM({type:cat.type==="quickorder"?"editQuickOrder":"editCat",cat})}
+                  onEdit={()=>setIM({type:"editCat",cat})}
                   onDel={()=>catDel(cat.id)}
                   isQuickOrder={cat.type==="quickorder"}/>
               ))}
@@ -1762,22 +1567,35 @@ function ManageView({data,persist}){
           {sortedCats.map(c=><ChipBtn key={c.id} active={filterCat===c.id} onClick={()=>setFlt(c.id)} color={c.color}>{c.name}</ChipBtn>)}
         </div>
         {!filterCat?<EmptyMsg label="เลือกหมวดหมู่เพื่อดูสินค้า"/>
-          :catProds.length===0?<EmptyMsg label="ยังไม่มีสินค้าในหมวดนี้"/>
-          :<DndContext sensors={prodSensors} collisionDetection={closestCenter} onDragEnd={handleProdDragEnd}>
-            <SortableContext items={catProds.map(p=>p.id)} strategy={verticalListSortingStrategy}>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {catProds.map(p=>{
-                  const cat=data.categories.find(c=>c.id===p.categoryId);
-                  const lc=(p.linkedAddons?.length||0)+(p.linkedFreeOpts?.length||0)+(p.linkedDiscounts?.length||0);
-                  return(
-                    <SortableProdRow key={p.id} prod={p} cat={cat} lc={lc}
-                      onEdit={()=>setIM({type:"editProd",prod:p})}
-                      onDel={()=>prodDel(p.id)}/>
-                  );
-                })}
-              </div>
-            </SortableContext>
-          </DndContext>}
+          :isFilterQuickOrder
+            ? (catPresets.length===0?<EmptyMsg label="ยังไม่มี Preset ในหมวดนี้"/>
+              :<DndContext sensors={presetSensorsMV} collisionDetection={closestCenter} onDragEnd={handlePresetDragEndMV}>
+                <SortableContext items={catPresets.map(p=>p.id)} strategy={verticalListSortingStrategy}>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {catPresets.map(p=>(
+                      <SortablePresetRowMV key={p.id} p={p} data={data}
+                        onEdit={()=>setIM({type:"editPreset",preset:p})}
+                        onDel={()=>setIM({type:"confirm",icon:<Trash2 size={36} color="#C84B4B" style={{margin:"0 auto 12px"}}/>,msg:"ลบ Preset นี้?",confirmLabel:"ลบเลย",confirmColor:"#C84B4B",onConfirm:()=>persist({...data,categories:data.categories.map(c=>c.id===filterCat?{...c,presets:c.presets.filter(x=>x.id!==p.id)}:c)},true)})}/>
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>)
+            : catProds.length===0?<EmptyMsg label="ยังไม่มีสินค้าในหมวดนี้"/>
+            :<DndContext sensors={prodSensors} collisionDetection={closestCenter} onDragEnd={handleProdDragEnd}>
+              <SortableContext items={catProds.map(p=>p.id)} strategy={verticalListSortingStrategy}>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {catProds.map(p=>{
+                    const cat=data.categories.find(c=>c.id===p.categoryId);
+                    const lc=(p.linkedAddons?.length||0)+(p.linkedFreeOpts?.length||0)+(p.linkedDiscounts?.length||0);
+                    return(
+                      <SortableProdRow key={p.id} prod={p} cat={cat} lc={lc}
+                        onEdit={()=>setIM({type:"editProd",prod:p})}
+                        onDel={()=>prodDel(p.id)}/>
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>}
       </>}
 
       {/* ADD-ONS — dnd-kit sortable */}
@@ -1833,9 +1651,10 @@ function ManageView({data,persist}){
       {/* Inner Modals */}
       {im?.type==="confirm"    &&<Overlay onClose={()=>setIM(null)}><ConfirmModal {...im} onConfirm={()=>{im.onConfirm();setIM(null);}} onCancel={()=>setIM(null)}/></Overlay>}
       {im?.type==="addCat"     &&<Overlay onClose={()=>setIM(null)}><AddCatModal    data={data} persist={persist} onClose={()=>setIM(null)}/></Overlay>}
-      {im?.type==="addQuickOrder"&&<Overlay onClose={()=>setIM(null)}><QuickOrderModal data={data} persist={persist} onClose={()=>setIM(null)}/></Overlay>}
-      {im?.type==="editQuickOrder"&&<Overlay onClose={()=>setIM(null)}><QuickOrderModal data={data} persist={persist} onClose={()=>setIM(null)} initCat={im.cat}/></Overlay>}
+      {im?.type==="addQuickOrderCat"&&<Overlay onClose={()=>setIM(null)}><AddCatModal data={data} persist={persist} onClose={()=>setIM(null)} isQuickOrder/></Overlay>}
       {im?.type==="editCat"    &&<Overlay onClose={()=>setIM(null)}><EditCatModal   cat={im.cat} data={data} persist={persist} onClose={()=>setIM(null)}/></Overlay>}
+      {im?.type==="addPreset"  &&<Overlay onClose={()=>setIM(null)}><AddPresetModal catId={filterCat} data={data} persist={persist} onClose={()=>setIM(null)}/></Overlay>}
+      {im?.type==="editPreset" &&<Overlay onClose={()=>setIM(null)}><AddPresetModal preset={im.preset} catId={filterCat} data={data} persist={persist} onClose={()=>setIM(null)}/></Overlay>}
       {im?.type==="addProd"    &&<Overlay onClose={()=>setIM(null)} wide><AddProdModal  data={data} persist={persist} catId={im.catId} onClose={()=>setIM(null)}/></Overlay>}
       {im?.type==="editProd"   &&<Overlay onClose={()=>setIM(null)} wide><EditProdModal prod={im.prod} data={data} persist={persist} onClose={()=>setIM(null)}/></Overlay>}
       {im?.type==="addAddon"   &&<Overlay onClose={()=>setIM(null)}><AddonFormModal   data={data} persist={persist} onClose={()=>setIM(null)}/></Overlay>}
@@ -2008,13 +1827,177 @@ function ProdFormShell({initState,title,data,persist,onClose}){
 }
 function AddProdModal({data,persist,catId,onClose}){ return <ProdFormShell initState={{catId:catId||data.categories[0]?.id}} title="เพิ่มสินค้า" data={data} persist={persist} onClose={onClose}/>; }
 function EditProdModal({prod,data,persist,onClose}){ return <ProdFormShell initState={{...prod,catId:prod.categoryId,vars:prod.variants.map(v=>({...v,price:String(v.price)}))}} title="แก้ไขสินค้า" data={data} persist={persist} onClose={onClose}/>; }
-function AddCatModal({data,persist,onClose}){
-  const [name,setName]=useState(""); const [color,setColor]=useState(PALETTE[0]); const [textColor,setTC]=useState("#FFF");
-  return(<div><ModalTitle>➕ เพิ่มหมวดหมู่</ModalTitle><Field label="ชื่อ"><input value={name} onChange={e=>setName(e.target.value)} placeholder="เช่น กาแฟ" style={iStyle}/></Field><Field label="สีพื้นหลัง"><ColorPicker value={color} onChange={setColor}/></Field><Field label="สีตัวอักษร"><div style={{display:"flex",gap:8}}><button onClick={()=>setTC("#FFF")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#FFF"?"#2C1810":"#D4C4B0"}`,background:textColor==="#FFF"?"#2C1810":"#F0E8DC",color:textColor==="#FFF"?"#FFF":"#5C4A36",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>สีขาว</button><button onClick={()=>setTC("#3B1F0A")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#3B1F0A"?"#2C1810":"#D4C4B0"}`,background:textColor==="#3B1F0A"?"#EDE6DC":"#F0E8DC",color:"#3B1F0A",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>น้ำตาลเข้ม</button></div><div style={{marginTop:8,background:color,borderRadius:9,padding:"10px",textAlign:"center",fontSize:14,fontWeight:700,color:textColor}}>ตัวอย่าง: {name||"หมวดหมู่"}</div></Field><ModalFooter onCancel={onClose} onSave={()=>{if(!name.trim())return;persist({...data,categories:[...data.categories,{id:`cat${uid()}`,name:name.trim(),color,textColor,order:data.categories.length}]},true);onClose();}}/></div>);
+function AddCatModal({data,persist,onClose,isQuickOrder}){
+  const [name,setName]=useState(isQuickOrder?"ออเดอร์ด่วน":""); const [color,setColor]=useState(isQuickOrder?"#F0C87A":PALETTE[0]); const [textColor,setTC]=useState("#FFF");
+  return(<div><ModalTitle>{isQuickOrder?"⚡ เพิ่มหมวดออเดอร์ด่วน":"➕ เพิ่มหมวดหมู่"}</ModalTitle><Field label="ชื่อ"><input value={name} onChange={e=>setName(e.target.value)} placeholder="เช่น กาแฟ" style={iStyle}/></Field><Field label="สีพื้นหลัง"><ColorPicker value={color} onChange={setColor}/></Field><Field label="สีตัวอักษร"><div style={{display:"flex",gap:8}}><button onClick={()=>setTC("#FFF")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#FFF"?"#2C1810":"#D4C4B0"}`,background:textColor==="#FFF"?"#2C1810":"#F0E8DC",color:textColor==="#FFF"?"#FFF":"#5C4A36",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>สีขาว</button><button onClick={()=>setTC("#3B1F0A")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#3B1F0A"?"#2C1810":"#D4C4B0"}`,background:textColor==="#3B1F0A"?"#EDE6DC":"#F0E8DC",color:"#3B1F0A",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>น้ำตาลเข้ม</button></div><div style={{marginTop:8,background:color,borderRadius:9,padding:"10px",textAlign:"center",fontSize:14,fontWeight:700,color:textColor}}>ตัวอย่าง: {name||"หมวดหมู่"}</div></Field><ModalFooter onCancel={onClose} onSave={()=>{if(!name.trim())return;persist({...data,categories:[...data.categories,{id:`cat${uid()}`,name:name.trim(),color,textColor,order:data.categories.length,...(isQuickOrder?{type:"quickorder",presets:[]}:{})}]},true);onClose();}}/></div>);
 }
 function EditCatModal({cat,data,persist,onClose}){
   const [name,setName]=useState(cat.name); const [color,setColor]=useState(cat.color); const [textColor,setTC]=useState(cat.textColor||"#FFF");
   return(<div><ModalTitle>✏️ แก้ไขหมวดหมู่</ModalTitle><Field label="ชื่อ"><input value={name} onChange={e=>setName(e.target.value)} style={iStyle}/></Field><Field label="สีพื้นหลัง"><ColorPicker value={color} onChange={setColor}/></Field><Field label="สีตัวอักษร"><div style={{display:"flex",gap:8}}><button onClick={()=>setTC("#FFF")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#FFF"?"#2C1810":"#D4C4B0"}`,background:textColor==="#FFF"?"#2C1810":"#F0E8DC",color:textColor==="#FFF"?"#FFF":"#5C4A36",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>สีขาว</button><button onClick={()=>setTC("#3B1F0A")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#3B1F0A"?"#2C1810":"#D4C4B0"}`,background:textColor==="#3B1F0A"?"#EDE6DC":"#F0E8DC",color:"#3B1F0A",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>น้ำตาลเข้ม</button></div><div style={{marginTop:8,background:color,borderRadius:9,padding:"10px",textAlign:"center",fontSize:14,fontWeight:700,color:textColor}}>ตัวอย่าง: {name||"หมวดหมู่"}</div></Field><ModalFooter onCancel={onClose} onSave={()=>{if(!name.trim())return;persist({...data,categories:data.categories.map(c=>c.id===cat.id?{...c,name:name.trim(),color,textColor}:c)},true);onClose();}}/></div>);
+}
+
+// ── AddPresetModal — ฟอร์มเดียวไม่ซ้อนชั้น สำหรับเพิ่ม/แก้ไข Preset (ออเดอร์ด่วน) ──
+// แทนที่ QuickOrderModal เดิมที่มี popup ซ้อนหลายชั้น (หมวด → preset → เมนู) ซึ่งเป็นจุดที่ทำให้เกิด error บ่อยที่สุด
+// ตาม Spec ใหม่: 1 Preset = 1 เมนูเท่านั้น ทำให้ไม่ต้องมีฟอร์ม "เพิ่มเมนูเข้า preset" ซ้อนอีกชั้น
+function AddPresetModal({preset,catId,data,persist,onClose}){
+  const isEditing=!!preset;
+  const [name,setName]=useState(preset?.name||"");
+  const [color,setColor]=useState(preset?.color||"#F5F0EA");
+  const [textColor,setTC]=useState(preset?.textColor||"#2C1810");
+  const allProds=useMemo(()=>data.products.filter(p=>{
+    const c=data.categories.find(x=>x.id===p.categoryId);
+    return c?.type!=="quickorder"; // เลือกได้แค่สินค้าจากหมวดทั่วไป ไม่ใช่ preset ของหมวด quickorder อื่น
+  }),[data.products,data.categories]);
+  const [selProdId,setSelProdId]=useState(preset?.productId||"");
+  const selProd=allProds.find(p=>p.id===selProdId)||null;
+  const [selVariIdx,setSelVariIdx]=useState(()=>{
+    if(!preset||!selProd) return 0;
+    const idx=selProd.variants.findIndex(v=>v.id===preset.variantId);
+    return idx>=0?idx:0;
+  });
+  const linked=selProd?{
+    addons:(data.addons||[]).filter(a=>(selProd.linkedAddons||[]).includes(a.id)),
+    freeOpts:(data.freeOpts||[]).filter(f=>(selProd.linkedFreeOpts||[]).includes(f.id)),
+    discounts:(data.discounts||[]).filter(d=>(selProd.linkedDiscounts||[]).includes(d.id)),
+  }:{addons:[],freeOpts:[],discounts:[]};
+  const [selAddons,setSelAddons]=useState(()=>{
+    if(!preset) return [];
+    return (preset.addonIds||[]).map(id=>{const a=data.addons?.find(x=>x.id===id);return a?{id:a.id,name:a.name,price:a.price}:null;}).filter(Boolean);
+  });
+  const [selFree,setSelFree]=useState(()=>preset?.freeOptIds||[]);
+  const [selDis,setSelDis]=useState(()=>{
+    if(!preset) return [];
+    return (preset.discountIds||[]).map(id=>{const d=data.discounts?.find(x=>x.id===id);return d?{id:d.id,name:d.name,amount:d.amount}:null;}).filter(Boolean);
+  });
+  const [note,setNote]=useState(preset?.note||"");
+  const [qty,setQty]=useState(preset?.qty||1);
+
+  const toggleAo=ao=>setSelAddons(p=>p.find(a=>a.id===ao.id)?p.filter(a=>a.id!==ao.id):[...p,ao]);
+  const toggleDis=d=>setSelDis(p=>p.find(x=>x.id===d.id)?p.filter(x=>x.id!==d.id):[...p,d]);
+  const toggleFree=(grp,opt)=>setSelFree(p=>{
+    const without=p.filter(x=>x.groupId!==grp.id);
+    const cur=p.find(x=>x.groupId===grp.id);
+    if(cur?.optId===opt.id) return without;
+    return [...without,{groupId:grp.id,groupName:grp.groupName,optId:opt.id,optLabel:opt.label}];
+  });
+
+  const vari=selProd?.variants[selVariIdx]||null;
+  const aoAmt=selAddons.reduce((s,a)=>s+a.price,0);
+  const disAmt=selDis.reduce((s,d)=>s+d.amount,0);
+  const total=Math.max(0,(vari?.price||0)+aoAmt-disAmt)*(qty||1);
+  const canSave=name.trim()&&selProd&&vari;
+
+  const save=()=>{
+    if(!canSave) return;
+    const p={
+      id:preset?.id||`qp${uid()}`, name:name.trim(), color, textColor,
+      productId:selProd.id, variantId:vari.id,
+      addonIds:selAddons.map(a=>a.id), freeOptIds:selFree, discountIds:selDis.map(d=>d.id),
+      note:note.trim(), qty:qty||1
+    };
+    persist({...data,categories:data.categories.map(c=>{
+      if(c.id!==catId) return c;
+      const existing=c.presets||[];
+      const next=isEditing?existing.map(x=>x.id===p.id?p:x):[...existing,p];
+      return {...c,presets:next};
+    })},true);
+    onClose();
+  };
+
+  return(
+    <div>
+      <ModalTitle>{isEditing?"✏️ แก้ไข Preset":"⚡ เพิ่ม Preset ใหม่"}</ModalTitle>
+      <Field label="ชื่อ Preset (แสดงบนการ์ด)">
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="เช่น ลาเต้เย็น" style={iStyle}/>
+      </Field>
+      <Field label="สีการ์ด"><ColorPicker value={color} onChange={setColor}/></Field>
+      <Field label="สีตัวอักษร">
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setTC("#FFF")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#FFF"?"#2C1810":"#D4C4B0"}`,background:textColor==="#FFF"?"#2C1810":"#F0E8DC",color:textColor==="#FFF"?"#FFF":"#5C4A36",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>สีขาว</button>
+          <button onClick={()=>setTC("#2C1810")} style={{flex:1,padding:"8px",borderRadius:9,border:`2px solid ${textColor==="#2C1810"?"#2C1810":"#D4C4B0"}`,background:textColor==="#2C1810"?"#EDE6DC":"#F0E8DC",color:"#2C1810",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>น้ำตาลเข้ม</button>
+        </div>
+      </Field>
+
+      <Field label="เลือกสินค้า">
+        <select value={selProdId} onChange={e=>{setSelProdId(e.target.value);setSelVariIdx(0);setSelAddons([]);setSelFree([]);setSelDis([]);}} style={iStyle}>
+          <option value="">-- เลือกสินค้า --</option>
+          {allProds.map(p=>{
+            const cat=data.categories.find(c=>c.id===p.categoryId);
+            return <option key={p.id} value={p.id}>{p.name}{cat?` (${cat.name})`:""}</option>;
+          })}
+        </select>
+      </Field>
+
+      {selProd&&<>
+        {selProd.variants.length>1&&<Field label="รูปแบบ">
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {selProd.variants.map((v,i)=>(
+              <button key={v.id} onClick={()=>setSelVariIdx(i)}
+                style={{padding:"8px 14px",borderRadius:9,border:`2px solid ${selVariIdx===i?selProd.color:"#D4C4B0"}`,background:selVariIdx===i?selProd.color:"#F5F0EA",color:selVariIdx===i?(selProd.textColor||"#FFF"):"#2C1810",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                {v.name} ฿{v.price}
+              </button>
+            ))}
+          </div>
+        </Field>}
+
+        {linked.addons.length>0&&<Field label="Add-on">
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {linked.addons.map(ao=>{
+              const act=selAddons.find(a=>a.id===ao.id);
+              return <button key={ao.id} onClick={()=>toggleAo(ao)}
+                style={{padding:"7px 12px",borderRadius:9,border:`1.5px solid ${act?"#2C1810":"#D4C4B0"}`,background:act?"#2C1810":"#F0E8DC",color:act?"#FFF":"#5C4A36",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                {act?"✓ ":""}{ao.name} +฿{ao.price}
+              </button>;
+            })}
+          </div>
+        </Field>}
+
+        {linked.freeOpts.map(grp=>(
+          <Field key={grp.id} label={grp.groupName}>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {(grp.options||[]).map(opt=>{
+                const act=selFree.find(x=>x.groupId===grp.id&&x.optId===opt.id);
+                return <button key={opt.id} onClick={()=>toggleFree(grp,opt)}
+                  style={{padding:"7px 12px",borderRadius:9,border:`1.5px solid ${act?"#4A7C6B":"#D4C4B0"}`,background:act?"#4A7C6B":"#F0E8DC",color:act?"#FFF":"#5C4A36",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                  {act?"✓ ":""}{opt.label}
+                </button>;
+              })}
+            </div>
+          </Field>
+        ))}
+
+        {linked.discounts.length>0&&<Field label="ส่วนลด">
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {linked.discounts.map(d=>{
+              const sel=selDis.find(x=>x.id===d.id);
+              return <button key={d.id} onClick={()=>toggleDis(d)}
+                style={{padding:"7px 12px",borderRadius:9,border:`1.5px solid ${sel?"#C84B4B":"#FCA5A5"}`,background:sel?"#FDE8E8":"#FFF",color:sel?"#C84B4B":"#9C4A4A",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                {d.name} -฿{d.amount}
+              </button>;
+            })}
+          </div>
+        </Field>}
+
+        <Field label="จำนวน (qty)">
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>setQty(q=>Math.max(1,q-1))} style={{width:34,height:34,borderRadius:8,border:"1.5px solid #D4C4B0",background:"#F5F0EA",fontSize:16,cursor:"pointer"}}>-</button>
+            <span style={{fontSize:16,fontWeight:700,minWidth:24,textAlign:"center"}}>{qty}</span>
+            <button onClick={()=>setQty(q=>q+1)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid #D4C4B0",background:"#F5F0EA",fontSize:16,cursor:"pointer"}}>+</button>
+          </div>
+        </Field>
+
+        <Field label="โน้ตพิเศษ (ถ้ามี)">
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น ไม่ใส่น้ำแข็ง, extra shot" style={iStyle}/>
+        </Field>
+
+        <div style={{background:color,borderRadius:9,padding:"10px",textAlign:"center",fontSize:14,fontWeight:700,color:textColor,marginBottom:8}}>
+          ตัวอย่าง: ⚡ {name||"Preset"} — ฿{total}
+        </div>
+      </>}
+
+      <ModalFooter onCancel={onClose} onSave={save} disabled={!canSave}/>
+    </div>
+  );
 }
 
 // ══════════════════════════════════════════════════
