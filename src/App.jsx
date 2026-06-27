@@ -671,7 +671,9 @@ export default function App() {
     const price=calcPrice(vari,selAddons,selDis);
     const note=buildNote(selAddons,selFree,selDis);
     const newItem={key:newKey,productId:prod.id,variantId:vari.id,name:prod.name,variant:vari.name,price,unit:prod.unit||"",note,selAddons,selFree,selDis,qty:oldQty,done:false};
-    setCart(c=>{
+    // ใช้ setter ของตะกร้าที่ active อยู่ตอนนี้ (A หรือ B) ไม่ใช่แค่ setCart (ตะกร้า A เสมอ)
+    const setter=activeTab==="A"?setCart:setCart2;
+    setter(c=>{
       const others=c.filter(i=>i.key!==oldKey);
       const ex=others.find(i=>i.key===newKey);
       if(ex) return others.map(i=>i.key===newKey?{...i,qty:i.qty+oldQty}:i);
@@ -684,8 +686,8 @@ export default function App() {
     setModal({type:"editCartItem",product:prod,oldKey:item.key,oldQty:item.qty,initV,initAo:item.selAddons||[],initFree:item.selFree||[],initDis:item.selDis||[]});
   }
 
-  function cartQty(key,d){ setActiveCart(c=>c.map(i=>i.key===key?{...i,qty:Math.max(0,i.qty+d)}:i).filter(i=>i.qty>0)); }
-  function cartDone(key){ setActiveCart(c=>c.map(i=>i.key===key?{...i,done:!i.done}:i)); }
+  function cartQty(key,d){ const s=activeTab==="A"?setCart:setCart2; s(c=>c.map(i=>i.key===key?{...i,qty:Math.max(0,i.qty+d)}:i).filter(i=>i.qty>0)); }
+  function cartDone(key){ const s=activeTab==="A"?setCart:setCart2; s(c=>c.map(i=>i.key===key?{...i,done:!i.done}:i)); }
   // active cart ตาม tab ที่เลือก
   const activeCart = activeTab==="A" ? cart : cart2;
   const setActiveCart = useCallback((v)=>{ if(activeTab==="A") setCart(v); else setCart2(v); },[activeTab]);
@@ -799,7 +801,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.2</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.3</span>
       </div>
 
       {/* VIEWS */}
