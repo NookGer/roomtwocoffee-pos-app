@@ -801,7 +801,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.3</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.4</span>
       </div>
 
       {/* VIEWS */}
@@ -2999,7 +2999,15 @@ function ChangeModal({modal,onDismiss}){
 
   const saveJpg=async()=>{
     setSaving(true);await new Promise(r=>setTimeout(r,400));
-    try{if(window.html2canvas&&receiptRef.current){const c=await window.html2canvas(receiptRef.current,{backgroundColor:"#ffffff",scale:2.5,useCORS:true,logging:false});const a=document.createElement("a");a.download=`receipt-${order?.orderNum?String(order.orderNum).padStart(3,"0"):order?.id?.slice(-4)||"x"}-${order?.date||"x"}.jpg`;a.href=c.toDataURL("image/jpeg",.92);a.click();}}catch(e){}
+    try{if(window.html2canvas&&receiptRef.current){const c=await window.html2canvas(receiptRef.current,{backgroundColor:"#ffffff",scale:2.5,useCORS:true,logging:false});
+      const dataUrl=c.toDataURL("image/jpeg",.92);
+      // iOS Safari block a.click() download แบบ silent — เปิดรูปใน tab ใหม่แทน แล้วให้ผู้ใช้กดค้าง → Save to Photos
+      const w=window.open();
+      if(w){ w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${dataUrl}" style="max-width:100%;max-height:100vh"/><p style="position:fixed;bottom:20px;left:0;right:0;text-align:center;color:#FFF;font-size:14px;font-family:sans-serif">กดค้างที่รูป → บันทึกภาพ</p></body></html>`); w.document.close(); }
+      else{ // fallback ถ้า popup ถูก block — ลอง a.click() เดิม
+        const a=document.createElement("a");a.download=`receipt-${order?.orderNum?String(order.orderNum).padStart(3,"0"):order?.id?.slice(-4)||"x"}-${order?.date||"x"}.jpg`;a.href=dataUrl;a.click();
+      }
+    }}catch(e){}
     setSaving(false);
   };
 
