@@ -801,7 +801,7 @@ export default function App() {
         {[["pos","🧾","POS"],["manage","⚙️","จัดการ"],["report","📊","รายงาน"],["ledger","📒","บัญชี"],["rcptset","🖨️","ตั้งค่าบิล"]].map(([k,ic,lb])=>(
           <button key={k} onClick={()=>setView(k)} style={{background:view===k?"#D4A574":"rgba(255,255,255,.09)",color:view===k?"#2C1810":"#C8A882",border:"none",borderRadius:11,padding:"9px 16px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s",minHeight:42}}>{ic} {lb}</button>
         ))}
-        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.4</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.25)",alignSelf:"flex-end",paddingBottom:2,letterSpacing:"0.05em"}}>v2.0.5</span>
       </div>
 
       {/* VIEWS */}
@@ -2997,16 +2997,12 @@ function ChangeModal({modal,onDismiss}){
     ? generatePromptPayQR(promptpay, order.total)
     : "";
 
+  const [imgUrl,setImgUrl]=useState(null); // เก็บ dataUrl ของรูปบิลที่ generate แล้ว แสดงใน modal ให้กดค้างบันทึก
   const saveJpg=async()=>{
     setSaving(true);await new Promise(r=>setTimeout(r,400));
     try{if(window.html2canvas&&receiptRef.current){const c=await window.html2canvas(receiptRef.current,{backgroundColor:"#ffffff",scale:2.5,useCORS:true,logging:false});
       const dataUrl=c.toDataURL("image/jpeg",.92);
-      // iOS Safari block a.click() download แบบ silent — เปิดรูปใน tab ใหม่แทน แล้วให้ผู้ใช้กดค้าง → Save to Photos
-      const w=window.open();
-      if(w){ w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${dataUrl}" style="max-width:100%;max-height:100vh"/><p style="position:fixed;bottom:20px;left:0;right:0;text-align:center;color:#FFF;font-size:14px;font-family:sans-serif">กดค้างที่รูป → บันทึกภาพ</p></body></html>`); w.document.close(); }
-      else{ // fallback ถ้า popup ถูก block — ลอง a.click() เดิม
-        const a=document.createElement("a");a.download=`receipt-${order?.orderNum?String(order.orderNum).padStart(3,"0"):order?.id?.slice(-4)||"x"}-${order?.date||"x"}.jpg`;a.href=dataUrl;a.click();
-      }
+      setImgUrl(dataUrl); // แสดงรูปใน modal เดิมเลย — ไม่ต้อง window.open หรือ a.click ที่ iPadOS 26 block
     }}catch(e){}
     setSaving(false);
   };
@@ -3063,9 +3059,16 @@ function ChangeModal({modal,onDismiss}){
           </div>{/* end content zIndex:1 */}
         </div>
         <div style={{background:"#EDE6DC",padding:"10px 14px"}}>
-          <button onClick={saveJpg} disabled={saving} style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:saving?0.7:1}}>
-            <ImageDown size={14}/>{saving?"กำลังบันทึก...":"💾 บันทึกบิล (.jpg)"}
-          </button>
+          {imgUrl
+            ? <div style={{textAlign:"center"}}>
+                <div style={{fontSize:12,color:"#8C7C6C",marginBottom:8,fontWeight:600}}>📱 กดค้างที่รูปด้านล่าง → "บันทึกภาพ"</div>
+                <img src={imgUrl} style={{width:"100%",borderRadius:10,boxShadow:"0 4px 12px rgba(0,0,0,.2)",display:"block"}} alt="receipt"/>
+                <button onClick={()=>setImgUrl(null)} style={{marginTop:10,background:"none",border:"none",color:"#8C7C6C",fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>ปิดรูป</button>
+              </div>
+            : <button onClick={saveJpg} disabled={saving} style={{width:"100%",background:"#2C1810",color:"#FFF",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:saving?0.7:1}}>
+                <ImageDown size={14}/>{saving?"กำลังสร้างรูป...":"💾 บันทึกบิล (.jpg)"}
+              </button>
+          }
         </div>
       </div>}
     </div>
